@@ -7,3 +7,4 @@ vendor/
 _site/
 *.user
 dist
+appsettings.json
