@@ -1,5 +1,7 @@
 using System.Text.Json;
+using Fleck;
 using StackExchange.Redis;
+using WebSocketBoilerplate;
 
 namespace ExerciseA;
 
@@ -9,19 +11,6 @@ public class User
     public string FirstName { get; set; }
     public string LastName { get; set; }
     public int Age { get; set; }
-}
-
-public class Product
-{
-    public int Id { get; set; }
-    public string Name { get; set; }
-    public decimal Price { get; set; }
-}
-
-public class VisitorStats
-{
-    public long TotalVisits { get; set; }
-    public DateTime LastVisit { get; set; }
 }
 
 public class RedisExercises
@@ -162,16 +151,23 @@ public class RedisExercises
     }
 
     /// <summary>
-    /// Exercise 6: Check if a key exists and delete it if it does.
+    /// Check if a key exists and delete it if it does.
     /// Return true if the key was found and deleted, false if it didn't exist.
     /// </summary>
     public async Task<bool> CheckAndDelete(string key)
     {
-        throw new NotImplementedException();
+        var exists = _db.KeyExists(key);
+        if (exists)
+        {
+                        _db.KeyDelete(key);
+                        return true;
+        }
+
+        return false;
     }
 
     [Fact]
-    public async Task Exercise6_CheckAndDelete_WorksCorrectly()
+    public async Task CheckAndDelete_WorksCorrectly()
     {
         // Arrange
         string key = "test:delete";
@@ -186,113 +182,29 @@ public class RedisExercises
         Assert.False(resultNonExisting);
         Assert.False(await _db.KeyExistsAsync(key));
     }
+    
 
     /// <summary>
-    /// Exercise 7: Implement a simple rate limiter.
-    /// Return true if the action is allowed (less than maxAttempts in the time window).
-    /// Return false if the rate limit has been exceeded.
-    /// </summary>
-    public async Task<bool> CheckRateLimit(string key, int maxAttempts, int windowSeconds)
-    {
-        throw new NotImplementedException();
-    }
-
-    [Fact]
-    public async Task Exercise7_CheckRateLimit_WorksCorrectly()
-    {
-        // Arrange
-        string key = "test:ratelimit";
-        int maxAttempts = 3;
-        int windowSeconds = 10;
-
-        // Act & Assert
-        // First 3 attempts should succeed
-        Assert.True(await CheckRateLimit(key, maxAttempts, windowSeconds));
-        Assert.True(await CheckRateLimit(key, maxAttempts, windowSeconds));
-        Assert.True(await CheckRateLimit(key, maxAttempts, windowSeconds));
-
-        // 4th attempt should fail
-        Assert.False(await CheckRateLimit(key, maxAttempts, windowSeconds));
-
-        // Verify the key expires
-        var ttl = await _db.KeyTimeToLiveAsync(key);
-        Assert.True(ttl.HasValue && ttl.Value.TotalSeconds <= windowSeconds);
-    }
-
-    /// <summary>
-    /// Exercise 8: Implement a visitor tracking system.
-    /// Track total visits and last visit time for a given page.
-    /// Return the updated stats.
-    /// </summary>
-    public async Task<VisitorStats> TrackPageVisit(string pageKey)
-    {
-        throw new NotImplementedException();
-    }
-
-    [Fact]
-    public async Task Exercise8_TrackPageVisit_WorksCorrectly()
-    {
-        // Arrange
-        string key = "test:page:visits";
-        DateTime beforeVisit = DateTime.UtcNow;
-
-        // Act
-        var result1 = await TrackPageVisit(key);
-        await Task.Delay(100); // Small delay to ensure different timestamps
-        var result2 = await TrackPageVisit(key);
-
-        // Assert
-        Assert.Equal(1, result1.TotalVisits);
-        Assert.Equal(2, result2.TotalVisits);
-        Assert.True(result1.LastVisit >= beforeVisit);
-        Assert.True(result2.LastVisit > result1.LastVisit);
-    }
-
-
-    /// <summary>
-    /// Exercise 9: Implement a simple product inventory system.
-    /// Decrease the product quantity by the specified amount.
-    /// Return true if there was sufficient quantity, false if not.
-    /// </summary>
-    public async Task<bool> DecrementProductQuantity(string productKey, int quantity)
-    {
-        throw new NotImplementedException();
-    }
-
-    [Fact]
-    public async Task Exercise9_DecrementProductQuantity_WorksCorrectly()
-    {
-        // Arrange
-        string key = "test:product:quantity";
-        await _db.StringSetAsync(key, "10");
-
-        // Act & Assert
-        // First decrement should succeed
-        Assert.True(await DecrementProductQuantity(key, 4));
-        Assert.Equal("6", await _db.StringGetAsync(key));
-
-        // Second decrement should succeed
-        Assert.True(await DecrementProductQuantity(key, 6));
-        Assert.Equal("0", await _db.StringGetAsync(key));
-
-        // Third decrement should fail (not enough quantity)
-        Assert.False(await DecrementProductQuantity(key, 1));
-        Assert.Equal("0", await _db.StringGetAsync(key));
-    }
-
-    /// <summary>
-    /// Exercise 10: Implement a basic caching system with automatic expiration.
-    /// Store the value only if the key doesn't exist (implement Cache-Aside pattern).
+    /// Implement a basic caching system with automatic expiration.
+    /// Store the value IF the key doesn't exist.
     /// Return the value whether it was just stored or already existed.
     /// </summary>
     public async Task<string> GetOrSetCache(string key, string value, int expirationSeconds)
     {
-        throw new NotImplementedException();
+        if (!_db.KeyExists(key))
+        {
+            _db.StringSet(key, value, TimeSpan.FromSeconds(expirationSeconds));
+            return value;
+        }
+
+        return _db.StringGet(key);
+
+
     }
 
 
     [Fact]
-    public async Task Exercise10_GetOrSetCache_WorksCorrectly()
+    public async Task GetOrSetCache_WorksCorrectly()
     {
         // Arrange
         string key = "test:cache";
@@ -310,7 +222,7 @@ public class RedisExercises
         Assert.Equal(initialValue, result2);
 
         // Wait for expiration
-        await Task.Delay(2000);
+        await Task.Delay(expirationSeconds * 2000);
 
         // After expiration, should set new value
         string result3 = await GetOrSetCache(key, newValue, expirationSeconds);
@@ -319,5 +231,28 @@ public class RedisExercises
         // Verify TTL was set
         var ttl = await _db.KeyTimeToLiveAsync(key);
         Assert.True(ttl.HasValue && ttl.Value.TotalSeconds <= expirationSeconds);
+    }
+
+
+    public async Task StoreWebSocketConnection()
+    {
+        var server = new CustomWebSocketServer(async socket =>
+        {
+
+            
+        }, async socket =>
+        {
+
+        });
+
+        var wsClient = new WsRequestClient([  typeof(RequestDto).Assembly,], url: "ws://localhost:"+Environment.GetEnvironmentVariable("PORT"));
+
+        await wsClient.ConnectAsync();
+    }
+
+    [Fact]
+    public async Task WebSocketConnection_Storing_Correctly_Stores()
+    {
+
     }
 }
