@@ -22,7 +22,7 @@
 <!-- #region ex B -->
 
 <details>
-    <summary>Pass-The-Unit-Test C# Redis Exercises (without WebSockets)</summary>
+    <summary>Pass-The-Unit-Test C# Redis Exercises (without WebSockets) [under construction]</summary>
 
 
 <div style="margin: 20px; padding: 5px;  box-shadow: 10px 10px 10px grey;">
@@ -46,7 +46,7 @@ _______
 <!-- #region ex B -->
 
 <details>
- <summary>Implementing Connection & Topic Subscription Logic</summary>
+ <summary>Implementing Connection & Topic Subscription Logic [under construction]</summary>
 
 <div style="margin: 20px; padding: 5px;  box-shadow: 10px 10px 10px grey;">
 
