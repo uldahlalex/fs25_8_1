@@ -2,12 +2,11 @@ using System.Net;
 using System.Net.Sockets;
 using Fleck;
 using Microsoft.AspNetCore.Builder;
+using WebSocketBoilerplate;
 
 namespace ExerciseA;
 
-public class CustomWebSocketServer(
-    Func<IWebSocketConnection, Task> onOpen,  
-    Func<IWebSocketConnection, Task> onClose)
+public class CustomWebSocketServer(ConnectionManager manager)
 {
     public void Start(WebApplication app)
     {
@@ -15,9 +14,23 @@ public class CustomWebSocketServer(
 
         server.Start(socket =>
         {
-            socket.OnOpen = async void() =>  await onOpen(socket);
-            socket.OnClose = async void () => await onClose(socket);
-            socket.OnMessage = async message => { };
+            socket.OnOpen = async void() =>  await manager.OnOpen(socket);
+            socket.OnClose = async void () => await manager.OnClose(socket);
+            socket.OnMessage = async message =>
+            {
+                Task.Run(async () =>
+                {
+                    try
+                    {
+                        await app.CallEventHandler(socket, message);
+                    }
+                    catch (Exception e)
+                    {
+                        Console.WriteLine(e.Message);
+                        Console.WriteLine(e.StackTrace);
+                    }
+                });
+            };
         });
     }
     

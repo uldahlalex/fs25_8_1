@@ -1,7 +1,5 @@
 using System.Text.Json;
-using Fleck;
 using StackExchange.Redis;
-using WebSocketBoilerplate;
 
 namespace ExerciseA;
 
@@ -234,25 +232,4 @@ public class RedisExercises
     }
 
 
-    public async Task StoreWebSocketConnection()
-    {
-        var server = new CustomWebSocketServer(async socket =>
-        {
-
-            
-        }, async socket =>
-        {
-
-        });
-
-        var wsClient = new WsRequestClient([  typeof(RequestDto).Assembly,], url: "ws://localhost:"+Environment.GetEnvironmentVariable("PORT"));
-
-        await wsClient.ConnectAsync();
-    }
-
-    [Fact]
-    public async Task WebSocketConnection_Storing_Correctly_Stores()
-    {
-
-    }
 }
