@@ -16,12 +16,28 @@ public class CustomWebSocketServer(ConnectionManager manager)
 
         server.Start(socket =>
         {
-            var uri = new Uri(socket.ConnectionInfo.Path, UriKind.RelativeOrAbsolute);
-            var query = HttpUtility.ParseQueryString(uri.Query);
+            var fullUri = new Uri("ws://localhost" + socket.ConnectionInfo.Path);
+            var query = HttpUtility.ParseQueryString(fullUri.Query);
             var id = query["id"];
-            socket.OnOpen = async void() =>  await manager.OnOpen(socket, id);
-            socket.OnClose = async void () => await manager.OnClose(socket, id);
-            socket.OnMessage = async message =>
+
+            if (string.IsNullOrEmpty(id))
+            {
+                socket.Close();
+                return;
+            }
+            socket.OnOpen =  () =>
+            {
+                Task.Run(async () => { await manager.OnOpen(socket, id); });
+            };
+            socket.OnClose =  () =>
+            {
+                Task.Run(async () =>
+                {
+                    await manager.OnClose(socket, id);
+
+                });
+            };
+            socket.OnMessage = message =>
             {
                 Task.Run(async () =>
                 {

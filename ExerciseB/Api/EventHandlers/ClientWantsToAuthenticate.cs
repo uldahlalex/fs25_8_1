@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Api;
 using Fleck;
 using WebSocketBoilerplate;
@@ -9,7 +10,7 @@ public class ClientWantsToAuthenticateDto : BaseDto
   public string Username { get; set; }
 }
 
-public class ServerAuthenticatesClient : BaseDto
+public class ServerAuthenticatesClientDto : BaseDto
 {
     
 }
@@ -24,5 +25,7 @@ public class ClientWantsToAuthenticate(ConnectionManager manager) : BaseEventHan
         {
             await manager.Subscribe(ConnectionManager.User(uid), clientId);
         }
+        socket.SendDto(new ServerAuthenticatesClientDto() {});
+        await manager.BroadcastToTopic("user", JsonSerializer.Serialize(new ServerAuthenticatesClientDto() { }));
     }
 }

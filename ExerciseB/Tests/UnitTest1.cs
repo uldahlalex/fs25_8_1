@@ -1,28 +1,72 @@
 using ExerciseA;
 using ExerciseA.EventHandlers;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.Extensions.Logging;
 using Microsoft.Testing.Platform.Services;
 using StackExchange.Redis;
 using WebSocketBoilerplate;
 
 namespace Tests;
 
-public class ApiTests : WebApplicationFactory<Program>
+public class ApiTests(ITestOutputHelper outputHelper) : WebApplicationFactory<Program>
 {
     private readonly IDatabase _db = RedisConnectionHelper.GetDatabase();
-    
+
+    protected override void ConfigureWebHost(IWebHostBuilder builder)
+    {
+        //configure logging
+        
+        builder.ConfigureLogging(logging =>
+        {
+            logging.ClearProviders();
+            logging.SetMinimumLevel(LogLevel.Trace);
+            logging.AddXUnit(outputHelper);
+        });
+
+    }
+
     [Fact]
     public async Task Api_Can_Successfully_Add_Connection_To_Redis()
     {
-        var client = new WsRequestClient([typeof(ClientWantsToAuthenticateDto).Assembly],
-            "ws://localhost:" + Environment.GetEnvironmentVariable("PORT"));
-        await client.ConnectAsync();
+        
+        _ = CreateClient();
+        var clientId = "test-client-" + Guid.NewGuid();
+        
+        var client = new WsRequestClient(
+            [typeof(ClientWantsToAuthenticateDto).Assembly],
+            "ws://localhost:" + Environment.GetEnvironmentVariable("PORT") + "?id=" + clientId
+        );
+  
+            await client.ConnectAsync();
+
+        await Task.Delay(1000); 
+        
+        var pattern = "topic:socket:*";
+        var keys = _db.Multiplexer.GetServer(_db.Multiplexer.GetEndPoints().First())
+            .Keys(pattern: pattern);
+            
+        var socketKey = "";
+        foreach (var key in keys)
+        {
+            var mems = await _db.SetMembersAsync(key);
+            if (mems.Any(m => m.ToString() == clientId))
+            {
+                socketKey = key;
+                break;
+            }
+        }
+        
+        
+        var members = await _db.SetMembersAsync(socketKey);
+        Assert.Contains(members, m => m.ToString() == clientId);
+        
+         client.Dispose();
         await Task.Delay(1000);
         
-        
-
+        members = await _db.SetMembersAsync(socketKey);
+        Assert.Empty(members);
     }
-    
     [Fact]
     public async Task Api_Can_Successfully_Remove_Connection_Upon_Disconnect()
     {
@@ -43,7 +87,7 @@ public class ApiTests : WebApplicationFactory<Program>
             "ws://localhost:" + Environment.GetEnvironmentVariable("PORT"));
         await client.ConnectAsync();
         var requestId = new Guid().ToString();
-        await client.SendMessage<ClientWantsToAuthenticateDto, ServerAuthenticatesClient>(
+        await client.SendMessage<ClientWantsToAuthenticateDto, ServerAuthenticatesClientDto>(
             new ClientWantsToAuthenticateDto()
             { 
                 

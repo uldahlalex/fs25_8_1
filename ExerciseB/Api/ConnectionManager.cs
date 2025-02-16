@@ -1,10 +1,12 @@
 using System.Collections.Concurrent;
+using System.Text.Json;
 using Fleck;
 using StackExchange.Redis;
+using WebSocketBoilerplate;
 
 namespace Api;
 
-public class ConnectionManager(IDatabase redis)
+public class ConnectionManager(IConnectionMultiplexer redis)
 {
     public ConcurrentDictionary<string, IWebSocketConnection> Sockets { get; } = new();
 
@@ -25,54 +27,66 @@ public class ConnectionManager(IDatabase redis)
     {
         expiry ??= TimeSpan.FromDays(1);
 
-        var tx = redis.CreateTransaction();
-        
-        var topicKey = Topic(topic);
-        await tx.SetAddAsync(topicKey, memberId);
-        await tx.KeyExpireAsync(topicKey, expiry.Value);
+        try
+        {
 
-        var memberTopicsKey = MemberTopics(memberId);
-        await tx.SetAddAsync(memberTopicsKey, topic);
-        await tx.KeyExpireAsync(memberTopicsKey, expiry.Value);
-        
-        await tx.ExecuteAsync();
+            var tx = redis.GetDatabase().CreateTransaction();
+
+            var topicKey = Topic(topic);
+             tx.SetAddAsync(topicKey, memberId);
+             tx.KeyExpireAsync(topicKey, expiry.Value);
+
+            var memberTopicsKey = MemberTopics(memberId);
+             tx.SetAddAsync(memberTopicsKey, topic);
+             tx.KeyExpireAsync(memberTopicsKey, expiry.Value);
+
+             await tx.ExecuteAsync();
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine(e.Message);
+            Console.WriteLine(e.StackTrace);
+            throw;
+        }
     }
 
     public async Task RemoveFromTopic(string topic, string memberId)
     {
-        var tx = redis.CreateTransaction();
+        var tx = redis.GetDatabase().CreateTransaction();
         
         var topicKey = Topic(topic);
-        await tx.SetRemoveAsync(topicKey, memberId);
+        tx.SetRemoveAsync(topicKey, memberId);
         
         var memberTopicsKey = MemberTopics(memberId);
-        await tx.SetRemoveAsync(memberTopicsKey, topic);
+         tx.SetRemoveAsync(memberTopicsKey, topic);
         
         await tx.ExecuteAsync();
     }
 
     public async Task<HashSet<string>> GetMembersFromTopicId(string topic)
     {
-        var members = await redis.SetMembersAsync(Topic(topic));
+        var members = await redis.GetDatabase().SetMembersAsync(Topic(topic));
         return members.Select(m => m.ToString()).ToHashSet();
     }
 
     public async Task<HashSet<string>> GetTopicsFromMemberId(string memberId)
     {
-        var topics = await redis.SetMembersAsync(MemberTopics(memberId));
+        var topics = await redis.GetDatabase().SetMembersAsync(MemberTopics(memberId));
         return topics.Select(t => t.ToString()).ToHashSet();
     }
 
-    public async Task<bool> OnOpen(IWebSocketConnection socket, string clientId)
+    public async Task OnOpen(IWebSocketConnection socket, string clientId)
     {
-        if (Sockets.TryGetValue(clientId, out var existingSocket))
-        {
-            existingSocket.Close();
-        }
 
         await AddToTopic($"socket:{socket.ConnectionInfo.Id}", clientId, TimeSpan.FromDays(1));
 
-        return Sockets.TryAdd(clientId, socket);
+        Sockets.TryAdd(clientId, socket);
+          socket.Send("hii");
+        foreach (var webSocketConnection in Sockets.Values)
+        {
+            webSocketConnection.Send("lol");
+            Console.WriteLine(webSocketConnection.ConnectionInfo.Id);
+        }
     }
 
     public async Task OnClose(IWebSocketConnection socket, string clientId)
@@ -83,10 +97,10 @@ public class ConnectionManager(IDatabase redis)
 
         var topics = await GetTopicsFromMemberId(clientId);
 
-        var tx = redis.CreateTransaction();
+        var tx = redis.GetDatabase().CreateTransaction();
         foreach (var topic in topics)
         {
-            await tx.SetRemoveAsync(Topic(topic), clientId);
+             tx.SetRemoveAsync(Topic(topic), clientId);
         }
 
         await tx.KeyDeleteAsync(MemberTopics(clientId));
@@ -97,7 +111,7 @@ public class ConnectionManager(IDatabase redis)
     public async Task<string?> LookupBySocketId(string socketId)
     {
         var members = await GetMembersFromTopicId($"socket:{socketId}");
-        return members.FirstOrDefault();
+        return members.FirstOrDefault(m => m.Equals(socketId));
     }
 
     public async Task BroadcastToTopic(string topic, string message)
@@ -121,7 +135,12 @@ public class ConnectionManager(IDatabase redis)
 
     public async Task<bool> IsInTopic(string topic, string memberId)
     {
-        return await redis.SetContainsAsync(Topic(topic), memberId);
+        return await redis.GetDatabase().SetContainsAsync(Topic(topic), memberId);
     }
     
+}
+
+public class ServerHasAddedConnection() : BaseDto
+{
+    public string Message { get; set; }
 }
