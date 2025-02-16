@@ -63,37 +63,29 @@ public class ConnectionManager(IConnectionMultiplexer redis)
         await tx.ExecuteAsync();
     }
 
-    public async Task<HashSet<string>> GetMembersFromTopicId(string topic)
+    public async Task<List<string>> GetMembersFromTopicId(string topic)
     {
         var members = await redis.GetDatabase().SetMembersAsync(Topic(topic));
-        return members.Select(m => m.ToString()).ToHashSet();
+        return members.Select(m => m.ToString()).ToList();
     }
 
-    public async Task<HashSet<string>> GetTopicsFromMemberId(string memberId)
+    public async Task<List<string>> GetTopicsFromMemberId(string memberId)
     {
         var topics = await redis.GetDatabase().SetMembersAsync(MemberTopics(memberId));
-        return topics.Select(t => t.ToString()).ToHashSet();
+        return topics.Select(t => t.ToString()).ToList();
     }
 
     public async Task OnOpen(IWebSocketConnection socket, string clientId)
     {
-
-        await AddToTopic($"socket:{socket.ConnectionInfo.Id}", clientId, TimeSpan.FromDays(1));
-
+        await AddToTopic(Socket(socket.ConnectionInfo.Id.ToString()), clientId, TimeSpan.FromDays(1));
         Sockets.TryAdd(clientId, socket);
-          socket.Send("hii");
-        foreach (var webSocketConnection in Sockets.Values)
-        {
-            webSocketConnection.Send("lol");
-            Console.WriteLine(webSocketConnection.ConnectionInfo.Id);
-        }
     }
 
     public async Task OnClose(IWebSocketConnection socket, string clientId)
     {
         Sockets.TryRemove(clientId, out _);
 
-        await RemoveFromTopic($"socket:{socket.ConnectionInfo.Id}", clientId);
+        await RemoveFromTopic(Socket(socket.ConnectionInfo.Id.ToString()), clientId);
 
         var topics = await GetTopicsFromMemberId(clientId);
 
@@ -110,8 +102,8 @@ public class ConnectionManager(IConnectionMultiplexer redis)
 
     public async Task<string?> LookupBySocketId(string socketId)
     {
-        var members = await GetMembersFromTopicId($"socket:{socketId}");
-        return members.FirstOrDefault(m => m.Equals(socketId));
+        var members = await GetMembersFromTopicId(Socket(socketId));
+        return members.FirstOrDefault();
     }
 
     public async Task BroadcastToTopic(string topic, string message)
@@ -126,12 +118,7 @@ public class ConnectionManager(IConnectionMultiplexer redis)
             }
         }
     }
-
-    public Task Subscribe(string topic, string memberId) =>
-        AddToTopic(topic, memberId, TimeSpan.FromDays(1));
-
-    public Task Unsubscribe(string topic, string memberId) =>
-        RemoveFromTopic(topic, memberId);
+    
 
     public async Task<bool> IsInTopic(string topic, string memberId)
     {

@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Sockets;
+using System.Text.Json;
 using System.Web;
 using Api;
 using Fleck;
@@ -12,47 +13,43 @@ public class CustomWebSocketServer(ConnectionManager manager)
 {
     public void Start(WebApplication app)
     {
-        var server = new WebSocketServer("ws://0.0.0.0:"+GetAvailablePort(8181));
-
-        server.Start(socket =>
+        var port = GetAvailablePort(8181);
+        Environment.SetEnvironmentVariable("PORT", port.ToString());
+        var url = $"ws://0.0.0.0:{port}";
+        var server = new WebSocketServer(url);
+        Action<IWebSocketConnection> config = ws =>
         {
-            var fullUri = new Uri("ws://localhost" + socket.ConnectionInfo.Path);
-            var query = HttpUtility.ParseQueryString(fullUri.Query);
+            var fulluri = url + ws.ConnectionInfo.Path;
+            var query = HttpUtility.ParseQueryString(fulluri);
             var id = query["id"];
 
-            if (string.IsNullOrEmpty(id))
-            {
-                socket.Close();
-                return;
-            }
-            socket.OnOpen =  () =>
-            {
-                Task.Run(async () => { await manager.OnOpen(socket, id); });
-            };
-            socket.OnClose =  () =>
-            {
-                Task.Run(async () =>
-                {
-                    await manager.OnClose(socket, id);
+            using var scope = app.Services.CreateScope();
+            var wsService = scope.ServiceProvider.GetRequiredService<ConnectionManager>();
 
-                });
+            ws.OnOpen = () => wsService.OnOpen(ws, id);
+            ws.OnClose = () => wsService.OnClose(ws, id);
+            ws.OnError = ex =>
+            {
+           
+                ws.Send(JsonSerializer.Serialize(new BaseDto()));
             };
-            socket.OnMessage = message =>
+            ws.OnMessage = message =>
             {
                 Task.Run(async () =>
                 {
                     try
                     {
-                        await app.CallEventHandler(socket, message);
+                        await app.CallEventHandler(ws, message);
                     }
                     catch (Exception e)
                     {
-                        Console.WriteLine(e.Message);
-                        Console.WriteLine(e.StackTrace);
+                        var baseDto = JsonSerializer.Deserialize<BaseDto>(message);
+                        ws.SendDto(baseDto);
                     }
                 });
             };
-        });
+        };
+        server.Start(config);
     }
     
     private int GetAvailablePort(int startPort)
@@ -75,7 +72,6 @@ public class CustomWebSocketServer(ConnectionManager manager)
             }
         } while (!isPortAvailable);
 
-        Environment.GetEnvironmentVariable("PORT");
         return port;
     }
 }

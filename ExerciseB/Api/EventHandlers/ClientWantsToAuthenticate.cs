@@ -12,20 +12,23 @@ public class ClientWantsToAuthenticateDto : BaseDto
 
 public class ServerAuthenticatesClientDto : BaseDto
 {
-    
+    public List<string> Topics { get; set; } = new List<string>();
 }
 
 public class ClientWantsToAuthenticate(ConnectionManager manager) : BaseEventHandler<ClientWantsToAuthenticateDto> 
 {
     public override async Task Handle(ClientWantsToAuthenticateDto dto, IWebSocketConnection socket)
     {
-        var uid = Guid.NewGuid().ToString();
         var clientId = await manager.LookupBySocketId(socket.ConnectionInfo.Id.ToString());
         if (clientId != null)
         {
-            await manager.Subscribe(ConnectionManager.User(uid), clientId);
+            await manager.AddToTopic(ConnectionManager.Device("A"), clientId);
         }
-        socket.SendDto(new ServerAuthenticatesClientDto() {});
+        socket.SendDto(new ServerAuthenticatesClientDto()
+        {
+            Topics = await manager.GetTopicsFromMemberId(clientId)
+            
+        });
         await manager.BroadcastToTopic("user", JsonSerializer.Serialize(new ServerAuthenticatesClientDto() { }));
     }
 }
