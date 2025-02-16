@@ -19,7 +19,7 @@ public class ApiTests : WebApplicationFactory<Program>
         await client.ConnectAsync();
         await Task.Delay(1000);
         
-        //Assert connection is added to redis
+        //Assert connection with some ID is added to redis
 
     }
     
