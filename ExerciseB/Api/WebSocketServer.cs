@@ -1,5 +1,7 @@
 using System.Net;
 using System.Net.Sockets;
+using System.Web;
+using Api;
 using Fleck;
 using Microsoft.AspNetCore.Builder;
 using WebSocketBoilerplate;
@@ -14,8 +16,11 @@ public class CustomWebSocketServer(ConnectionManager manager)
 
         server.Start(socket =>
         {
-            socket.OnOpen = async void() =>  await manager.OnOpen(socket);
-            socket.OnClose = async void () => await manager.OnClose(socket);
+            var uri = new Uri(socket.ConnectionInfo.Path, UriKind.RelativeOrAbsolute);
+            var query = HttpUtility.ParseQueryString(uri.Query);
+            var id = query["id"];
+            socket.OnOpen = async void() =>  await manager.OnOpen(socket, id);
+            socket.OnClose = async void () => await manager.OnClose(socket, id);
             socket.OnMessage = async message =>
             {
                 Task.Run(async () =>

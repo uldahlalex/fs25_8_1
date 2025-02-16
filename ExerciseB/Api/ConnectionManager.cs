@@ -1,20 +1,35 @@
+using System.Collections.Concurrent;
 using Fleck;
+using StackExchange.Redis;
 
-namespace ExerciseA;
+namespace Api;
 
-public class ConnectionManager
+public class ConnectionManager(IDatabase redis)
 {
-    public async Task<object> OnOpen(IWebSocketConnection socket)
+    public ConcurrentDictionary<string, IWebSocketConnection> Sockets { get; set; }
+    
+    public async Task<object> OnOpen(IWebSocketConnection socket, string customConnectionId)
+    {
+        Sockets.TryAdd(socket.ConnectionInfo.Id.ToString(), socket);
+        
+    }
+
+    public async Task<object> OnClose(IWebSocketConnection socket, string customConnectionId)
     {
         throw new NotImplementedException();
     }
 
-    public async Task<object> OnClose(IWebSocketConnection socket)
+    public async Task Subscribe(IWebSocketConnection socket, string topic)
     {
         throw new NotImplementedException();
     }
-
-    public async Task Subscribe(IWebSocketConnection socket, string dtoTopic)
+    
+    public async Task Unsubscribe(IWebSocketConnection socket, string topic)
+    {
+        throw new NotImplementedException();
+    }
+    
+    public async Task BroadcastToAllTopicSubscribers(string topic)
     {
         throw new NotImplementedException();
     }
