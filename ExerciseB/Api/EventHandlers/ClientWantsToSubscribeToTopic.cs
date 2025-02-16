@@ -18,6 +18,7 @@ public class ClientWantsToSubscribeToTopicEventHandler(ConnectionManager manager
 {
     public override async Task Handle(ClientWantsToSubscribeToTopicDto dto, IWebSocketConnection socket)
     {
-        await manager.Subscribe(socket, dto.Topic);
+        var theGeneratedClientId = manager.LookupByKey(ConnectionManager.TOPIC_SOCKET_ID(socket.ConnectionInfo.Id.ToString()));
+        await manager.Subscribe(theGeneratedClientId, dto.Topic);
     }
 }

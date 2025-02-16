@@ -11,153 +11,181 @@
     <script src="https://unpkg.com/lucide@latest"></script>
 </head>
 <body>
-    <div id="root"></div>
+<div id="root"></div>
 
-    <script type="text/babel">
-        // Simple icon components
-        const Icon = ({ name, size = 20, className = "" }) => (
-            <i className={`lucide lucide-${name} ${className}`} style={{ fontSize: size + 'px' }}></i>
-        );
+<script type="text/babel">
+    const Icon = ({ name, size = 20, className = "" }) => (
+        <i className={`lucide lucide-${name} ${className}`} style={{ fontSize: size + 'px' }}></i>
+    );
 
-        const RedisSet = ({ title, items, iconName, color = "bg-blue-100" }) => {
-            const [isExpanded, setIsExpanded] = React.useState(false);
+    const RedisSet = ({ title, items, iconName, color = "bg-blue-100", description = "" }) => {
+        const [isExpanded, setIsExpanded] = React.useState(false);
 
-            return (
-                <div className="mb-4">
-                    <div 
-                        className="flex items-center cursor-pointer p-2 bg-gray-100 rounded-t"
-                        onClick={() => setIsExpanded(!isExpanded)}
-                    >
-                        {iconName && <Icon name={iconName} className="mr-2" />}
-                        <h3 className="font-semibold flex-1">{title}</h3>
-                        <Icon name={isExpanded ? "chevron-up" : "chevron-down"} />
-                    </div>
-                    {isExpanded && (
-                        <div className={`${color} p-4 rounded-b border border-t-0 border-gray-200`}>
-                            {items.length === 0 ? 
-                                <div className="bg-white p-2 rounded shadow italic text-gray-500">Empty set</div> :
-                                items.map((item, idx) => (
-                                    <div key={idx} className="bg-white p-2 mb-2 rounded shadow">
-                                        {item}
-                                    </div>
-                                ))
-                            }
-                        </div>
-                    )}
+        return (
+            <div className="mb-4">
+                <div
+                    className="flex items-center cursor-pointer p-2 bg-gray-100 rounded-t"
+                    onClick={() => setIsExpanded(!isExpanded)}
+                >
+                    {iconName && <Icon name={iconName} className="mr-2" />}
+                    <h3 className="font-semibold flex-1">{title}</h3>
+                    <Icon name={isExpanded ? "chevron-up" : "chevron-down"} />
                 </div>
-            );
+                {isExpanded && (
+                    <div className={`${color} p-4 rounded-b border border-t-0 border-gray-200`}>
+                        {description && (
+                            <div className="text-sm text-gray-600 mb-3 italic">
+                                {description}
+                            </div>
+                        )}
+                        {items.length === 0 ?
+                            <div className="bg-white p-2 rounded shadow italic text-gray-500">Empty set</div> :
+                            items.map((item, idx) => (
+                                <div key={idx} className="bg-white p-2 mb-2 rounded shadow">
+                                    {item}
+                                </div>
+                            ))
+                        }
+                    </div>
+                )}
+            </div>
+        );
+    };
+
+    const ConnectionManagerVisualization = () => {
+        const rooms = ['gaming', 'music'];
+
+        const exampleData = {
+            "sockets": [
+                "client-123 → WebSocket Connection (Active)",
+                "client-456 → WebSocket Connection (Active)",
+                "client-789 → WebSocket Connection (Active)"
+            ],
+            "socket:map": [
+                "socket:map:abc-123 → client-123",
+                "socket:map:def-456 → client-456",
+                "socket:map:ghi-789 → client-789"
+            ],
+            "topic:authenticated": [
+                "client-123",
+                "client-456"
+            ],
+            "topic:chat:room:gaming": [
+                "client-123",
+                "client-789"
+            ],
+            "topic:chat:room:music": [
+                "client-456"
+            ],
+            "connection:topics:client-123": [
+                "authenticated",
+                "chat:room:gaming"
+            ],
+            "connection:topics:client-456": [
+                "authenticated",
+                "chat:room:music"
+            ],
+            "connection:topics:client-789": [
+                "chat:room:gaming"
+            ]
         };
 
-        const ConnectionManagerVisualization = () => {
-            const rooms = ['gaming', 'music'];
+        return (
+            <div className="max-w-3xl mx-auto p-4">
+                <h2 className="text-xl font-bold mb-4">Connection Manager Structure</h2>
 
-            const exampleData = {
-                "sockets": [
-                    "client-123 → WebSocket Connection",
-                    "client-456 → WebSocket Connection",
-                    "client-789 → WebSocket Connection"
-                ],
-                "topic:authenticated": [
-                    "client-123",
-                    "client-456"
-                ],
-                "topic:chat:room:gaming": [
-                    "client-123",
-                    "client-789"
-                ],
-                "topic:chat:room:music": [
-                    "client-456"
-                ],
-                "connection:topics:client-123": [
-                    "authenticated",
-                    "chat:room:gaming"
-                ],
-                "connection:topics:client-456": [
-                    "authenticated",
-                    "chat:room:music"
-                ],
-                "connection:topics:client-789": [
-                    "chat:room:gaming"
-                ]
-            };
+                <div className="mb-6 p-4 bg-gray-50 rounded">
+                    <h3 className="font-semibold mb-2">In-Memory State</h3>
+                    <RedisSet
+                        title="ConcurrentDictionary<string, IWebSocketConnection> Sockets"
+                        items={exampleData["sockets"]}
+                        iconName="cpu"
+                        color="bg-yellow-50"
+                        description="In-memory dictionary holding active WebSocket connections"
+                    />
+                </div>
 
-            return (
-                <div className="max-w-3xl mx-auto p-4">
-                    <h2 className="text-xl font-bold mb-4">Connection Manager Structure</h2>
-                    
-                    <div className="mb-6 p-4 bg-gray-50 rounded">
-                        <h3 className="font-semibold mb-2">In-Memory Connections</h3>
-                        <RedisSet 
-                            title="ConcurrentDictionary<string, IWebSocketConnection> Sockets"
-                            items={exampleData["sockets"]}
+                <div className="mb-6 p-4 bg-gray-50 rounded">
+                    <h3 className="font-semibold mb-2">Socket ID Mappings</h3>
+                    <RedisSet
+                        title="Socket ID to Client ID Mappings"
+                        items={exampleData["socket:map"]}
+                        iconName="git-branch"
+                        color="bg-orange-50"
+                        description="Maps Fleck-generated socket IDs to client-generated connection IDs"
+                    />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                    <div>
+                        <h3 className="font-semibold mb-2">Topic Sets</h3>
+                        <RedisSet
+                            title="topic:authenticated"
+                            items={exampleData["topic:authenticated"]}
+                            iconName="key"
+                            color="bg-green-50"
+                            description="Set of authenticated client IDs"
+                        />
+
+                        {rooms.map(room => (
+                            <RedisSet
+                                key={room}
+                                title={`topic:chat:room:${room}`}
+                                items={exampleData[`topic:chat:room:${room}`]}
+                                iconName="users"
+                                color="bg-blue-50"
+                                description={`Set of client IDs subscribed to ${room} room`}
+                            />
+                        ))}
+                    </div>
+
+                    <div>
+                        <h3 className="font-semibold mb-2">Connection Topic Maps</h3>
+                        <RedisSet
+                            title="connection:topics:client-123"
+                            items={exampleData["connection:topics:client-123"]}
                             iconName="network"
-                            color="bg-yellow-50"
+                            color="bg-purple-50"
+                            description="Set of topics that client-123 is subscribed to"
+                        />
+
+                        <RedisSet
+                            title="connection:topics:client-456"
+                            items={exampleData["connection:topics:client-456"]}
+                            iconName="network"
+                            color="bg-purple-50"
+                            description="Set of topics that client-456 is subscribed to"
+                        />
+
+                        <RedisSet
+                            title="connection:topics:client-789"
+                            items={exampleData["connection:topics:client-789"]}
+                            iconName="network"
+                            color="bg-purple-50"
+                            description="Set of topics that client-789 is subscribed to"
                         />
                     </div>
+                </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-                        <div>
-                            <h3 className="font-semibold mb-2">Topic Sets</h3>
-                            <RedisSet 
-                                title="topic:authenticated"
-                                items={exampleData["topic:authenticated"]}
-                                iconName="key"
-                                color="bg-green-50"
-                            />
-                            
-                            {rooms.map(room => (
-                                <RedisSet 
-                                    key={room}
-                                    title={`topic:chat:room:${room}`}
-                                    items={exampleData[`topic:chat:room:${room}`]}
-                                    iconName="users"
-                                    color="bg-blue-50"
-                                />
-                            ))}
-                        </div>
-                        
-                        <div>
-                            <h3 className="font-semibold mb-2">Connection Topic Maps</h3>
-                            <RedisSet 
-                                title="connection:topics:client-123"
-                                items={exampleData["connection:topics:client-123"]}
-                                iconName="network"
-                                color="bg-purple-50"
-                            />
-                            
-                            <RedisSet 
-                                title="connection:topics:client-456"
-                                items={exampleData["connection:topics:client-456"]}
-                                iconName="network"
-                                color="bg-purple-50"
-                            />
-                            
-                            <RedisSet 
-                                title="connection:topics:client-789"
-                                items={exampleData["connection:topics:client-789"]}
-                                iconName="network"
-                                color="bg-purple-50"
-                            />
-                        </div>
-                    </div>
-
-                    <div className="p-4 bg-gray-50 rounded">
-                        <h3 className="font-semibold mb-2">Key Structure</h3>
-                        <div className="space-y-2 font-mono text-sm">
-                            <div>TOPIC_PREFIX = "topic:"</div>
-                            <div>CONNECTION_TO_TOPICS = "connection:topics:"</div>
-                            <div>TOPIC_AUTHENTICATED = "authenticated"</div>
-                            <div>TOPIC_CHAT_ROOM(roomId) → "chat:room:{'{'}roomId{'}'}"</div>
-                        </div>
+                <div className="p-4 bg-gray-50 rounded">
+                    <h3 className="font-semibold mb-2">Key Structure</h3>
+                    <div className="space-y-2 font-mono text-sm">
+                        <div>TOPIC_PREFIX = "topic:"</div>
+                        <div>CONNECTION_TO_TOPICS = "connection:topics:"</div>
+                        <div>SOCKET_ID_MAP = "socket:map:"</div>
+                        <div>TOPIC_AUTHENTICATED = "authenticated"</div>
+                        <div>TOPIC_SOCKET_ID(socketId) → "socket:map:{'{'}socketId{'}'}"</div>
+                        <div>TOPIC_CHAT_ROOM(roomId) → "chat:room:{'{'}roomId{'}'}"</div>
                     </div>
                 </div>
-            );
-        };
-
-        ReactDOM.render(
-            <ConnectionManagerVisualization />,
-            document.getElementById('root')
+            </div>
         );
-    </script>
+    };
+
+    ReactDOM.render(
+        <ConnectionManagerVisualization />,
+        document.getElementById('root')
+    );
+</script>
 </body>
 </html>

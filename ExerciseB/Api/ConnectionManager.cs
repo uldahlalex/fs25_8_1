@@ -13,11 +13,13 @@ public class ConnectionManager(IDatabase redis)
     
     private const string TOPIC_PREFIX = "topic:";
     private const string CONNECTION_TO_TOPICS = "connection:topics:";
+    private const string SOCKET_ID_MAP = "socket:map:";
     
     public const string TOPIC_AUTHENTICATED = "authenticated";
+    public static string TOPIC_SOCKET_ID(string socketId) => $"{SOCKET_ID_MAP}{socketId}";
     public static string TOPIC_CHAT_ROOM(string roomId) => $"chat:room:{roomId}";
 
-    public async Task Subscribe(IWebSocketConnection socket, string topic, string clientGeneratedConnectionId)
+    public async Task Subscribe(string topic, string clientGeneratedConnectionId)
     {
         var topicKey = $"{TOPIC_PREFIX}{topic}";
         var connectionTopicsKey = $"{CONNECTION_TO_TOPICS}{clientGeneratedConnectionId}";
@@ -32,27 +34,40 @@ public class ConnectionManager(IDatabase redis)
         await tx.ExecuteAsync();
     }
 
-    public Task<bool> OnOpen(IWebSocketConnection socket, string clientGeneratedConnectionId)
+    public async Task<bool> OnOpen(IWebSocketConnection socket, string clientGeneratedConnectionId)
     {
         if (Sockets.TryGetValue(clientGeneratedConnectionId, out var existingSocket))
         {
             try { existingSocket.Close(); } catch { }
         }
         
-        return Task.FromResult(Sockets.TryAdd(clientGeneratedConnectionId, socket));
+        // Store the mapping between socket.Id and clientGeneratedConnectionId
+        await redis.StringSetAsync(
+            TOPIC_SOCKET_ID(socket.ConnectionInfo.Id.ToString()), 
+            clientGeneratedConnectionId,
+            TimeSpan.FromDays(1)
+        );
+        
+        return Sockets.TryAdd(clientGeneratedConnectionId, socket);
     }
 
     public async Task Unsubscribe(IWebSocketConnection socket, string topic)
     {
-        var customConnectionId = socket.ConnectionInfo.Id.ToString();
+        var socketId = socket.ConnectionInfo.Id.ToString();
+        var clientGeneratedConnectionId = await LookupBySocketId(socketId);
         
-        await redis.SetRemoveAsync($"{TOPIC_PREFIX}{topic}", customConnectionId);
-        await redis.SetRemoveAsync($"{CONNECTION_TO_TOPICS}{customConnectionId}", topic);
+        if (clientGeneratedConnectionId == null) return;
+        
+        await redis.SetRemoveAsync($"{TOPIC_PREFIX}{topic}", clientGeneratedConnectionId);
+        await redis.SetRemoveAsync($"{CONNECTION_TO_TOPICS}{clientGeneratedConnectionId}", topic);
     }
 
     public async Task OnClose(IWebSocketConnection socket, string clientGeneratedConnectionId)
     {
         Sockets.TryRemove(clientGeneratedConnectionId, out _);
+        
+        // Clean up the socket ID mapping
+        await redis.KeyDeleteAsync(TOPIC_SOCKET_ID(socket.ConnectionInfo.Id.ToString()));
         
         var topics = await redis.SetMembersAsync($"{CONNECTION_TO_TOPICS}{clientGeneratedConnectionId}");
         
@@ -77,5 +92,11 @@ public class ConnectionManager(IDatabase redis)
                 await socket.Send(message);
             }
         }
+    }
+
+    public async Task<string?> LookupBySocketId(string socketId)
+    {
+        var value = await redis.StringGetAsync(TOPIC_SOCKET_ID(socketId));
+        return value.HasValue ? value.ToString() : null;
     }
 }
