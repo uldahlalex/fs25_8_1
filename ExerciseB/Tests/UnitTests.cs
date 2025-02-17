@@ -1,66 +1,135 @@
 using System.Text.Json;
 using Api;
+using ExerciseA;
 using Fleck;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Moq;
+using StackExchange.Redis;
 
 namespace Tests;
 
-public class UnitTests
+public class ConnectionManagerTests
 {
-    private readonly DictionaryConnectionManager _manager;
+    private readonly DictionaryConnectionManager _dictionaryManager;
+    private readonly RedisConnectionManager _redisManager;
+    private readonly IConnectionMultiplexer _redis;
+    private readonly AppOptions _appOptions;
 
-    public UnitTests()
+    public ConnectionManagerTests()
     {
-        _manager = new DictionaryConnectionManager();
+        // Set up configuration
+        var configuration = new ConfigurationBuilder()
+            .SetBasePath(Directory.GetCurrentDirectory())
+            .AddJsonFile("appsettings.json", optional: false)
+            .AddEnvironmentVariables()  // This will override appsettings.json values
+            .Build();
+
+        // Set up options
+        var services = new ServiceCollection();
+        services.AddOptions<AppOptions>()
+            .Bind(configuration.GetSection(nameof(AppOptions)))
+            .ValidateOnStart();
+        
+        var serviceProvider = services.BuildServiceProvider();
+        _appOptions = serviceProvider.GetRequiredService<IOptions<AppOptions>>().Value;
+
+        // Set up logging
+        var loggerFactory = new LoggerFactory();
+        var dictionaryLogger = new Logger<DictionaryConnectionManager>(loggerFactory);
+        var redisLogger = new Logger<RedisConnectionManager>(loggerFactory);
+        
+        _dictionaryManager = new DictionaryConnectionManager(dictionaryLogger);
+        
+        // Configure Redis
+        var redisConfig = new ConfigurationOptions
+        {
+            AbortOnConnectFail = false,
+            ConnectTimeout = 5000,
+            SyncTimeout = 5000,
+            Ssl = true,
+            DefaultDatabase = 0,
+            ConnectRetry = 5,
+            ReconnectRetryPolicy = new ExponentialRetry(5000),
+            EndPoints = { { _appOptions.REDIS_HOST, 6379 } },
+            User = _appOptions.REDIS_USERNAME,
+            Password = _appOptions.REDIS_PASSWORD
+        };
+
+        _redis = ConnectionMultiplexer.Connect(redisConfig);
+        _redisManager = new RedisConnectionManager(_redis, redisLogger);
+        
     }
 
-    [Fact]
-    public async Task OnConnect_Can_Add_Socket_And_Client_To_Dictionaries()
+    [Theory]
+    [InlineData(true)]  
+    [InlineData(false)] 
+    public async Task OnConnect_Can_Add_Socket_And_Client_To_Storage(bool useDictionary)
     {
-        //arrange
+        // arrange
+        var manager = useDictionary ? 
+            (IConnectionManager)_dictionaryManager : 
+            (IConnectionManager)_redisManager;
+            
         var connectionId = Guid.NewGuid().ToString();
         var socketId = Guid.NewGuid();
         var wsMock = new Mock<IWebSocketConnection>();
         wsMock.SetupGet(ws => ws.ConnectionInfo.Id).Returns(socketId);
         var ws = wsMock.Object;
-        var topic = "sockets";
         
-        //act
-        await _manager.OnOpen(ws, connectionId);
+        // act
+        await manager.OnOpen(ws, connectionId);
         
-        //assert
-        Assert.Equal(_manager.Sockets.Values.First(), ws);
-        if (!_manager.TopicMembers["sockets"].Contains(connectionId))
-            throw new Exception("Expected client id "+connectionId+" to be in hash set(value) of key 'sockets' " +
-                                "Values found in dictionary: "+JsonSerializer.Serialize(_manager.TopicMembers));
-        if(!_manager.MemberTopics[connectionId].Contains("sockets"))
-            throw new Exception("Expected topic "+topic+" to be in hash set(value) of key 'sockets' " +
-                                "Values found in dictionary: "+JsonSerializer.Serialize(_manager.MemberTopics));
+        // assert
+        Assert.Equal(manager.Sockets.Values.First(), ws);
+        
+        var allTopics = await manager.GetAllTopicsWithMembers();
+        var allMembers = await manager.GetAllMembersWithTopics();
+        
+        if (!allTopics[socketId.ToString()].Contains(connectionId))
+            throw new Exception($"Expected client id {connectionId} to be in hash set(value) of key {socketId}" +
+                              $"Values found: {JsonSerializer.Serialize(allTopics)}");
+        
+        if (!allMembers[connectionId].Contains(socketId.ToString()))
+            throw new Exception($"Expected socket id {socketId} to be in hash set(value) of key {connectionId}" +
+                              $"Values found: {JsonSerializer.Serialize(allMembers)}");
     }
     
-    [Fact]
-    public async Task OnClose_Can_Remove_Socket_And_Client_From_Dictionaries()
+    [Theory]
+    [InlineData(true)]  // true for dictionary manager
+    [InlineData(false)] // false for redis manager
+    public async Task OnClose_Can_Remove_Socket_And_Client_From_Storage(bool useDictionary)
     {
-        //arrange
+        // arrange
+        var manager = useDictionary ? 
+            (IConnectionManager)_dictionaryManager : 
+            (IConnectionManager)_redisManager;
+            
         var connectionId = Guid.NewGuid().ToString();
         var socketId = Guid.NewGuid();
         var wsMock = new Mock<IWebSocketConnection>();
         wsMock.SetupGet(ws => ws.ConnectionInfo.Id).Returns(socketId);
         var ws = wsMock.Object;
-        var topic = "sockets";
-        await _manager.OnOpen(ws, connectionId);
+        await manager.OnOpen(ws, connectionId);
         
-        //act
-        await _manager.OnClose(ws, connectionId);
+        // act
+        await manager.OnClose(ws, connectionId);
         
-        //assert
-        Assert.DoesNotContain(_manager.Sockets.Values, s => s.ConnectionInfo.Id == socketId);
-        if (_manager.TopicMembers["sockets"].Contains(connectionId))
-            throw new Exception("Expected client id "+connectionId+" to not be in hash set(value) of key 'sockets' " +
-                                "Values found in dictionary: "+JsonSerializer.Serialize(_manager.TopicMembers));
-        if (_manager.MemberTopics.Keys.Contains(connectionId))
-            throw new Exception("Expected memberTopics to not have key "+connectionId+" " +
-                                "Keys found in dictionary: "+JsonSerializer.Serialize(_manager.MemberTopics));
-        
+        // assert
+        Assert.DoesNotContain(manager.Sockets.Values, s => s.ConnectionInfo.Id == socketId);
+    
+        var allTopics = await manager.GetAllTopicsWithMembers();
+        Assert.False(allTopics.ContainsKey(socketId.ToString()) && 
+                     allTopics[socketId.ToString()].Contains(connectionId));
+    }
+    
+    public void Dispose()
+    {
+
+        var server = _redis.GetServer(_redis.GetEndPoints().First());
+        server.FlushDatabase();
+        _redis.Dispose();
     }
 }

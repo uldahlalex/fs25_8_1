@@ -36,7 +36,7 @@ public class Program
             var multiplexer = ConnectionMultiplexer.Connect(redisConfig);
             return multiplexer;
         });
-        builder.Services.AddSingleton<IConnectionManager, DictionaryConnectionManager>();
+         builder.Services.AddSingleton<IConnectionManager, RedisConnectionManager>();
         builder.Services.AddSingleton<CustomWebSocketServer>();
         builder.Services.InjectEventHandlers(Assembly.GetExecutingAssembly());
 

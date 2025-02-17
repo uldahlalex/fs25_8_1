@@ -28,12 +28,20 @@ public class CustomWebSocketServer(IConnectionManager manager)
             var id = query["id"];
             using var scope = app.Services.CreateScope();
 
-            ws.OnOpen = () => manager.OnOpen(ws, id);
-            ws.OnClose = () => manager.OnClose(ws, id);
-            ws.OnError = ex =>
+            try
             {
-           
-                ws.Send(JsonSerializer.Serialize(new BaseDto()));
+                  ws.OnOpen = () => manager.OnOpen(ws, id);
+                            ws.OnClose = () => manager.OnClose(ws, id);
+            } catch (Exception e)
+            {
+                Console.WriteLine(e.Message);
+                Console.WriteLine(e.StackTrace);
+            }
+          
+            ws.OnError = e =>
+            {
+                Console.WriteLine(e.Message);
+                Console.WriteLine(e.StackTrace);
             };
             ws.OnMessage = message =>
             {
@@ -45,6 +53,8 @@ public class CustomWebSocketServer(IConnectionManager manager)
                     }
                     catch (Exception e)
                     {
+                        Console.WriteLine(e.Message);
+                        Console.WriteLine(e.StackTrace);
                         var baseDto = JsonSerializer.Deserialize<BaseDto>(message);
                         ws.SendDto(baseDto);
                     }

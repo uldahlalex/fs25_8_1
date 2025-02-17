@@ -6,6 +6,8 @@ namespace Api;
 public class DictionaryConnectionManager : IConnectionManager
 {
     public ConcurrentDictionary<string /* Connection ID */, IWebSocketConnection /* Sockets */> Sockets { get; } = new();
+
+
     /// <summary>
     /// Lookup(key) = Topic ID, value = hashset of Connection IDs 
     /// </summary>
@@ -16,18 +18,29 @@ public class DictionaryConnectionManager : IConnectionManager
     /// </summary>
     public ConcurrentDictionary<string /* Connection ID */, HashSet<string> /* all the topic ID's they are connected to */> MemberTopics { get; set; } = new();
 
-    public string[] TopicIds = new[] { "sockets", "device/A", "room/A" }; //could be persisted in a database
+    private string[] InitialTopicIds = new[] { "device/A", "room/A" }; //could be persisted in a database
+    private readonly ILogger<DictionaryConnectionManager> _logger;
 
-    public DictionaryConnectionManager()
+    public DictionaryConnectionManager(ILogger<DictionaryConnectionManager> logger)
     {
-        foreach (var topicId in TopicIds)
+        _logger = logger;
+        foreach (var topicId in InitialTopicIds)
         {
             TopicMembers.TryAdd(topicId, new HashSet<string>());
         }
 
     }
-    
-     public Task AddToTopic(string topic, string memberId, TimeSpan? expiry = null)
+    public Task<ConcurrentDictionary<string, HashSet<string>>> GetAllTopicsWithMembers()
+    {
+        return Task.FromResult(TopicMembers);
+    }
+
+    public Task<ConcurrentDictionary<string, HashSet<string>>> GetAllMembersWithTopics()
+    {
+        return Task.FromResult(MemberTopics);
+    }
+
+    public Task AddToTopic(string topic, string memberId, TimeSpan? expiry = null)
     {
         TopicMembers.AddOrUpdate(
             topic,
@@ -87,7 +100,8 @@ public class DictionaryConnectionManager : IConnectionManager
         if (!success)
             throw new Exception("Failed to add socket " + socket.ConnectionInfo.Id +
                                 " to dictionary with client ID key " + clientId);
-        AddToTopic("sockets", clientId);
+        AddToTopic(socket.ConnectionInfo.Id.ToString(), clientId);
+        _logger.LogInformation("Connected with client ID " + clientId + " and socket ID " + socket.ConnectionInfo.Id);
         return Task.CompletedTask;
     }
     
@@ -108,14 +122,9 @@ public class DictionaryConnectionManager : IConnectionManager
         return Task.CompletedTask;
     }
 
-    public Task<string?> LookupBySocketId(string socketId)
-    {
-        var pair = Sockets.FirstOrDefault(kvp => 
-            kvp.Value.ConnectionInfo.Id.ToString() == socketId);
-        return Task.FromResult(pair.Key);
-    }
+ 
 
-    public async Task BroadcastToTopic(string topic, string message)
+    public Task BroadcastToTopic(string topic, string message)
     {
         if (TopicMembers.TryGetValue(topic, out var members))
         {
@@ -127,12 +136,9 @@ public class DictionaryConnectionManager : IConnectionManager
                 }
             }
         }
+
+        return Task.CompletedTask;
     }
 
-    public Task<bool> IsInTopic(string topic, string memberId)
-    {
-        return Task.FromResult(
-            TopicMembers.TryGetValue(topic, out var members) && 
-            members.Contains(memberId));
-    }
+
 }
