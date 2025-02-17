@@ -5,9 +5,23 @@ namespace Api;
 
 public class DictionaryConnectionManager : IConnectionManager
 {
-    public ConcurrentDictionary<string, IWebSocketConnection> Sockets { get; } = new();
-    public ConcurrentDictionary<string, HashSet<string>> TopicMembers { get; set; } = new();
-    public ConcurrentDictionary<string, HashSet<string>> MemberTopics { get; set; } = new();
+    public ConcurrentDictionary<string /* Connection ID */, IWebSocketConnection /* Sockets */> Sockets { get; } = new();
+    /// <summary>
+    /// Lookup(key) = Topic ID, value = hashset of Connection IDs 
+    /// </summary>
+    public ConcurrentDictionary<string /* Topic ID */, HashSet<string> /* All Connection IDs connected to topic */> TopicMembers { get; set; } = new();
+   
+    /// <summary>
+    /// Lookup (key) = Connection ID, value = hashset of topic IDs
+    /// </summary>
+    public ConcurrentDictionary<string /* Connection ID */, HashSet<string> /* all the topic ID's they are connected to */> MemberTopics { get; set; } = new();
+
+    public const string TopicSocketsKey = "sockets";
+
+    public DictionaryConnectionManager()
+    {
+        TopicMembers.TryAdd(TopicSocketsKey, new HashSet<string>());
+    }
     
      public Task AddToTopic(string topic, string memberId, TimeSpan? expiry = null)
     {
@@ -65,8 +79,21 @@ public class DictionaryConnectionManager : IConnectionManager
 
     public Task OnOpen(IWebSocketConnection socket, string clientId)
     {
-        Sockets.TryAdd(clientId, socket);
-        socket.Send("Connected");
+        var success = Sockets.TryAdd(clientId, socket);
+        if (!success)
+            throw new Exception("Failed to add socket " + socket.ConnectionInfo.Id +
+                                " to dictionary with client ID key " + clientId);
+        
+     
+        // if(!TopicMembers.Keys.Contains())  //TopicMembers already has all known topics - only relevant if dynamically adding more
+        if(!TopicMembers[TopicSocketsKey].Contains(clientId))
+            TopicMembers[TopicSocketsKey].Add(clientId);
+
+        if (!MemberTopics.ContainsKey(clientId))
+            MemberTopics.TryAdd(clientId, new HashSet<string>());
+        
+        var memberTopics = MemberTopics[clientId];
+        memberTopics.Add(TopicSocketsKey);
         return Task.CompletedTask;
     }
 

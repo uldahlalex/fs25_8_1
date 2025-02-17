@@ -6,6 +6,7 @@ namespace Api;
 public interface IConnectionManager
 {
     ConcurrentDictionary<string, IWebSocketConnection> Sockets { get; }
+    
     Task AddToTopic(string topic, string memberId, TimeSpan? expiry = null);
     Task RemoveFromTopic(string topic, string memberId);
     Task<List<string>> GetMembersFromTopicId(string topic);
