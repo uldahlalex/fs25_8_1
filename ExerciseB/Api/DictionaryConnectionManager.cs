@@ -16,11 +16,15 @@ public class DictionaryConnectionManager : IConnectionManager
     /// </summary>
     public ConcurrentDictionary<string /* Connection ID */, HashSet<string> /* all the topic ID's they are connected to */> MemberTopics { get; set; } = new();
 
-    public const string TopicSocketsKey = "sockets";
+    public string[] TopicIds = new[] { "sockets", "device/A", "room/A" }; //could be persisted in a database
 
     public DictionaryConnectionManager()
     {
-        TopicMembers.TryAdd(TopicSocketsKey, new HashSet<string>());
+        foreach (var topicId in TopicIds)
+        {
+            TopicMembers.TryAdd(topicId, new HashSet<string>());
+        }
+
     }
     
      public Task AddToTopic(string topic, string memberId, TimeSpan? expiry = null)
@@ -83,19 +87,10 @@ public class DictionaryConnectionManager : IConnectionManager
         if (!success)
             throw new Exception("Failed to add socket " + socket.ConnectionInfo.Id +
                                 " to dictionary with client ID key " + clientId);
-        
-     
-        // if(!TopicMembers.Keys.Contains())  //TopicMembers already has all known topics - only relevant if dynamically adding more
-        if(!TopicMembers[TopicSocketsKey].Contains(clientId))
-            TopicMembers[TopicSocketsKey].Add(clientId);
-
-        if (!MemberTopics.ContainsKey(clientId))
-            MemberTopics.TryAdd(clientId, new HashSet<string>());
-        
-        var memberTopics = MemberTopics[clientId];
-        memberTopics.Add(TopicSocketsKey);
+        AddToTopic("sockets", clientId);
         return Task.CompletedTask;
     }
+    
 
     public Task OnClose(IWebSocketConnection socket, string clientId)
     {
