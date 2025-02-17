@@ -3,7 +3,7 @@ using Fleck;
 
 namespace Api;
 
-public class DictionaryConnectionManager// : IConnectionManager
+public class DictionaryConnectionManager : IConnectionManager
 {
     public ConcurrentDictionary<string /* Connection ID */, IWebSocketConnection /* Sockets */> Sockets { get; } = new();
     /// <summary>
@@ -14,7 +14,7 @@ public class DictionaryConnectionManager// : IConnectionManager
     /// <summary>
     /// Lookup (key) = Connection ID, value = hashset of topic IDs
     /// </summary>
-    // public ConcurrentDictionary<string /* Connection ID */, HashSet<string> /* all the topic ID's they are connected to */> MemberTopics { get; set; } = new();
+    public ConcurrentDictionary<string /* Connection ID */, HashSet<string> /* all the topic ID's they are connected to */> MemberTopics { get; set; } = new();
 
     public string[] TopicIds = new[] { "sockets", "device/A", "room/A" }; //could be persisted in a database
 
@@ -37,20 +37,15 @@ public class DictionaryConnectionManager// : IConnectionManager
                 existing.Add(memberId);
                 return existing;
             });
-        TopicMembers.AddOrUpdate(memberId, new HashSet<string> { topic }, (_, existing) =>
-        {
-            existing.Add(topic);
-            return existing;
-        });
 
-        // MemberTopics.AddOrUpdate(
-        //     memberId,
-        //     new HashSet<string> { topic },
-        //     (_, existing) =>
-        //     {
-        //         existing.Add(topic);
-        //         return existing;
-        //     });
+        MemberTopics.AddOrUpdate(
+            memberId,
+            new HashSet<string> { topic },
+            (_, existing) =>
+            {
+                existing.Add(topic);
+                return existing;
+            });
 
         return Task.CompletedTask;
     }
@@ -62,11 +57,10 @@ public class DictionaryConnectionManager// : IConnectionManager
             members.Remove(memberId);
         }
 
-        // if (MemberTopics.TryGetValue(memberId, out var topics))
-        // {
-        //     topics.Remove(topic);
-        // }
-        TopicMembers.Remove(memberId, out _);
+        if (MemberTopics.TryGetValue(memberId, out var topics))
+        {
+            topics.Remove(topic);
+        }
 
         return Task.CompletedTask;
     }
@@ -81,11 +75,10 @@ public class DictionaryConnectionManager// : IConnectionManager
 
     public Task<List<string>> GetTopicsFromMemberId(string memberId)
     {
-        // return Task.FromResult(
-        //     MemberTopics.TryGetValue(memberId, out var topics) 
-        //         ? topics.ToList() 
-        //         : new List<string>());
-        return Task.FromResult(TopicMembers[memberId].ToList());
+        return Task.FromResult(
+            MemberTopics.TryGetValue(memberId, out var topics) 
+                ? topics.ToList() 
+                : new List<string>());
     }
 
     public Task OnOpen(IWebSocketConnection socket, string clientId)
@@ -95,7 +88,6 @@ public class DictionaryConnectionManager// : IConnectionManager
             throw new Exception("Failed to add socket " + socket.ConnectionInfo.Id +
                                 " to dictionary with client ID key " + clientId);
         AddToTopic("sockets", clientId);
-        AddToTopic(socket.ConnectionInfo.Id.ToString(), clientId);
         return Task.CompletedTask;
     }
     
@@ -103,30 +95,25 @@ public class DictionaryConnectionManager// : IConnectionManager
     public Task OnClose(IWebSocketConnection socket, string clientId)
     {
         Sockets.TryRemove(clientId, out _);
-        //
-        // if (MemberTopics.TryGetValue(clientId, out var topics))
-        // {
-        //     foreach (var topic in topics)
-        //     {
-        //         RemoveFromTopic(topic, clientId);
-        //     }
-        // }
-        //
-        // MemberTopics.TryRemove(clientId, out _);
-        TopicMembers.TryRemove(clientId, out _);
-        TopicMembers.Keys.ToList().ForEach(topic =>
+        
+        if (MemberTopics.TryGetValue(clientId, out var topics))
         {
-            TopicMembers[topic].Remove(clientId);
-        });
+            foreach (var topic in topics)
+            {
+                RemoveFromTopic(topic, clientId);
+            }
+        }
+
+        MemberTopics.TryRemove(clientId, out _);
         return Task.CompletedTask;
     }
 
-    // public Task<string?> LookupBySocketId(string socketId)
-    // {
-    //     var pair = Sockets.FirstOrDefault(kvp => 
-    //         kvp.Value.ConnectionInfo.Id.ToString() == socketId);
-    //     return Task.FromResult(pair.Key);
-    // }
+    public Task<string?> LookupBySocketId(string socketId)
+    {
+        var pair = Sockets.FirstOrDefault(kvp => 
+            kvp.Value.ConnectionInfo.Id.ToString() == socketId);
+        return Task.FromResult(pair.Key);
+    }
 
     public async Task BroadcastToTopic(string topic, string message)
     {
@@ -142,10 +129,10 @@ public class DictionaryConnectionManager// : IConnectionManager
         }
     }
 
-    // public Task<bool> IsInTopic(string topic, string memberId)
-    // {
-    //     return Task.FromResult(
-    //         TopicMembers.TryGetValue(topic, out var members) && 
-    //         members.Contains(memberId));
-    // }
+    public Task<bool> IsInTopic(string topic, string memberId)
+    {
+        return Task.FromResult(
+            TopicMembers.TryGetValue(topic, out var members) && 
+            members.Contains(memberId));
+    }
 }

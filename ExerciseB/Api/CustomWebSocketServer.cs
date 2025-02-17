@@ -9,7 +9,7 @@ using WebSocketBoilerplate;
 
 namespace ExerciseA;
 
-public class CustomWebSocketServer(DictionaryConnectionManager manager)
+public class CustomWebSocketServer(IConnectionManager manager)
 {
     public void Start(WebApplication app)
     {
