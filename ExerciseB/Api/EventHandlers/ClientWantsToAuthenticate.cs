@@ -15,7 +15,7 @@ public class ServerAuthenticatesClientDto : BaseDto
     public List<string> Topics { get; set; } = new List<string>();
 }
 
-public class ClientWantsToAuthenticate(ConnectionManager manager) : BaseEventHandler<ClientWantsToAuthenticateDto> 
+public class ClientWantsToAuthenticate(IConnectionManager manager) : BaseEventHandler<ClientWantsToAuthenticateDto> 
 {
     public override async Task Handle(ClientWantsToAuthenticateDto dto, IWebSocketConnection socket)
     {

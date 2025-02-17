@@ -40,12 +40,11 @@ public class ApiTests(ITestOutputHelper outputHelper) : WebApplicationFactory<Pr
         );
 
         await client.ConnectAsync();
-        outputHelper.WriteLine("Successfully connected to WebSocket");
 
         var connectionManager = Server.Services
-            .GetRequiredService<ConnectionManager>();
+            .GetRequiredService<IConnectionManager>();
         var result = await connectionManager.GetTopicsFromMemberId(clientId);
-        outputHelper.WriteLine(JsonSerializer.Serialize(result));
+        Console.WriteLine(JsonSerializer.Serialize(result));
     }
 
     [Fact]

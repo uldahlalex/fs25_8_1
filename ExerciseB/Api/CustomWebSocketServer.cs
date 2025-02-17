@@ -9,7 +9,7 @@ using WebSocketBoilerplate;
 
 namespace ExerciseA;
 
-public class CustomWebSocketServer(ConnectionManager manager)
+public class CustomWebSocketServer(IConnectionManager manager)
 {
     public void Start(WebApplication app)
     {
@@ -19,15 +19,17 @@ public class CustomWebSocketServer(ConnectionManager manager)
         var server = new WebSocketServer(url);
         Action<IWebSocketConnection> config = ws =>
         {
-            var fulluri = url + ws.ConnectionInfo.Path;
-            var query = HttpUtility.ParseQueryString(fulluri);
+            // Get just the query string part
+            var queryString = ws.ConnectionInfo.Path.Split('?').Length > 1 
+                ? ws.ConnectionInfo.Path.Split('?')[1] 
+                : "";
+        
+            var query = HttpUtility.ParseQueryString(queryString);
             var id = query["id"];
-
             using var scope = app.Services.CreateScope();
-            var wsService = scope.ServiceProvider.GetRequiredService<ConnectionManager>();
 
-            ws.OnOpen = () => wsService.OnOpen(ws, id);
-            ws.OnClose = () => wsService.OnClose(ws, id);
+            ws.OnOpen = () => manager.OnOpen(ws, id);
+            ws.OnClose = () => manager.OnClose(ws, id);
             ws.OnError = ex =>
             {
            
