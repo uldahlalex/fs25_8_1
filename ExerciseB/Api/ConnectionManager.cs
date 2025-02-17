@@ -6,7 +6,7 @@ using WebSocketBoilerplate;
 
 namespace Api;
 
-public class ConnectionManager(IConnectionMultiplexer redis)
+public class ConnectionManager(IConnectionMultiplexer redis) : IConnectionManager
 {
     public ConcurrentDictionary<string, IWebSocketConnection> Sockets { get; } = new();
 
