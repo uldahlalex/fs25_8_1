@@ -124,6 +124,16 @@ public class ConnectionManagerTests
         Assert.False(allTopics.ContainsKey(socketId.ToString()) && 
                      allTopics[socketId.ToString()].Contains(connectionId));
     }
+
+    public async Task Client_Reconnection_Successfully_Associates_With_Existing_State()
+    {
+        throw new NotImplementedException();
+    }
+
+    public async Task Server_Restart_With_Reconnecting_Clients_And_Redis_Allows_For_Reestablshing_State()
+    {
+        throw new NotImplementedException();
+    }
     
     public void Dispose()
     {
