@@ -3,6 +3,7 @@
 
 (+ Internship Info Meeting with Jesper Ottosen)
 
+![alt text](image.png)
 
 #### Remote repo for today's lesson: `https://github.com/uldahlalex/fs25_8_1`
 
