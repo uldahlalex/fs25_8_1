@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Api;
-using ExerciseA.EventHandlers;
+using Api.EventHandlers;
+using Api.EventHandlers.Dtos;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
@@ -19,11 +20,10 @@ public class ApiTests(ITestOutputHelper outputHelper) : WebApplicationFactory<Pr
             logging.SetMinimumLevel(LogLevel.Trace);
             logging.AddXUnit(outputHelper);
         });
-        //return create host
     }
 
     [Fact]
-    public async Task Api_Can_Successfully_Add_Connection_To_Redis()
+    public async Task Api_Can_Successfully_Add_Connection()
     {
         _ = CreateClient();
         var wsPort = Environment.GetEnvironmentVariable("PORT");
@@ -40,11 +40,11 @@ public class ApiTests(ITestOutputHelper outputHelper) : WebApplicationFactory<Pr
         );
 
         await client.ConnectAsync();
+        var manager = Services.GetRequiredService<IConnectionManager>();
+        Assert.Single(manager.ConnectionIdToSocket.Values);
+        Assert.Single(manager.SocketToConnectionId.Values);
+        
 
-        var connectionManager = Server.Services
-            .GetRequiredService<IConnectionManager>();
-        var result = await connectionManager.GetTopicsFromMemberId(clientId);
-        Console.WriteLine(JsonSerializer.Serialize(result));
     }
 
  

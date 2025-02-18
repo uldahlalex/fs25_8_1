@@ -1,15 +1,13 @@
 using System.Net;
 using System.Net.Sockets;
-using System.Text.Json;
 using System.Web;
-using Api;
+using Api.EventHandlers.Dtos;
 using Fleck;
-using Microsoft.AspNetCore.Builder;
 using WebSocketBoilerplate;
 
-namespace ExerciseA;
+namespace Api;
 
-public class CustomWebSocketServer(IConnectionManager manager)
+public class CustomWebSocketServer(IConnectionManager manager, ILogger<CustomWebSocketServer> logger)
 {
     public void Start(WebApplication app)
     {
@@ -17,35 +15,17 @@ public class CustomWebSocketServer(IConnectionManager manager)
         Environment.SetEnvironmentVariable("PORT", port.ToString());
         var url = $"ws://0.0.0.0:{port}";
         var server = new WebSocketServer(url);
+        
         Action<IWebSocketConnection> config = ws =>
         {
-            var queryString = ws.ConnectionInfo.Path.Split('?').Length > 1 
-                ? ws.ConnectionInfo.Path.Split('?')[1] 
+            var queryString = ws.ConnectionInfo.Path.Split('?').Length > 1
+                ? ws.ConnectionInfo.Path.Split('?')[1]
                 : "";
-        
-            var query = HttpUtility.ParseQueryString(queryString);
-            var id = query["id"];
-            using var scope = app.Services.CreateScope();
 
-            try
-            {
-                  ws.OnOpen = () => manager.OnOpen(ws, id);
-                            ws.OnClose = () => manager.OnClose(ws, id);
-            } catch (Exception e)
-            {
-                var errorDto = new ServerSendsErrorMessageDto()
-                {
-                    Error = e.Message
-                };
-                ws.SendDto(errorDto);
-                Console.WriteLine(e.Message);
-                Console.WriteLine(e.StackTrace);
-            }
-          
-            ws.OnError = e =>
-            {
-                manager.OnClose(ws, id);
-            };
+            var id = HttpUtility.ParseQueryString(queryString)["id"];
+
+            ws.OnOpen = () => manager.OnOpen(ws, id);
+            ws.OnClose = () => manager.OnClose(ws, id);
             ws.OnMessage = message =>
             {
                 Task.Run(async () =>
@@ -55,21 +35,19 @@ public class CustomWebSocketServer(IConnectionManager manager)
                         await app.CallEventHandler(ws, message);
                     }
                     catch (Exception e)
-                    {
-                        Console.WriteLine(e.Message);
-                        Console.WriteLine(e.StackTrace);
-                        var errorDto = new ServerSendsErrorMessageDto()
+                    { 
+                        logger.LogError(e, "Error while handling message");
+                        ws.SendDto(new ServerSendsErrorMessageDto()
                         {
                             Error = e.Message
-                        };
-                        ws.SendDto(errorDto);
+                        });
                     }
                 });
             };
         };
         server.Start(config);
     }
-    
+
     private int GetAvailablePort(int startPort)
     {
         var port = startPort;
@@ -92,9 +70,4 @@ public class CustomWebSocketServer(IConnectionManager manager)
 
         return port;
     }
-}
-
-public class ServerSendsErrorMessageDto : BaseDto
-{
-    public string Error { get; set; }
 }

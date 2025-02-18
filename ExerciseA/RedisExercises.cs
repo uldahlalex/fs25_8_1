@@ -3,14 +3,6 @@ using StackExchange.Redis;
 
 namespace ExerciseA;
 
-public class User
-{
-    public int Id { get; set; }
-    public string FirstName { get; set; }
-    public string LastName { get; set; }
-    public int Age { get; set; }
-}
-
 public class RedisExercises
 {
     private readonly IDatabase _db;
@@ -157,8 +149,8 @@ public class RedisExercises
         var exists = _db.KeyExists(key);
         if (exists)
         {
-                        _db.KeyDelete(key);
-                        return true;
+            _db.KeyDelete(key);
+            return true;
         }
 
         return false;

@@ -1,6 +1,7 @@
-using ExerciseA;
 using Microsoft.Extensions.Configuration;
 using StackExchange.Redis;
+
+namespace ExerciseA;
 
 public static class RedisConnectionHelper
 {

@@ -1,22 +1,8 @@
-using System.ComponentModel.DataAnnotations;
-using Api;
+using Api.EventHandlers.Dtos;
 using Fleck;
 using WebSocketBoilerplate;
 
-namespace ExerciseA.EventHandlers;
-
-public class ClientWantsToJoinRoomDto : BaseDto
-{
-    [MinLength(1)]
-    public string RoomId { get; set; }   
-}
-
-public class ServerConfirmsJoinRoomDto : BaseDto
-{
-    public string RoomId { get; set; }
-    public bool Success { get; set; }
-}
-
+namespace Api.EventHandlers;
 
 public class ClientWantsToJoinRoomEventHandler(IConnectionManager connectionManager) : BaseEventHandler<ClientWantsToJoinRoomDto>
 {

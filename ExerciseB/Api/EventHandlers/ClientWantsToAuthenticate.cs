@@ -1,19 +1,9 @@
 using System.Text.Json;
-using Api;
+using Api.EventHandlers.Dtos;
 using Fleck;
 using WebSocketBoilerplate;
 
-namespace ExerciseA.EventHandlers;
-
-public class ClientWantsToAuthenticateDto : BaseDto
-{
-  public string Username { get; set; }
-}
-
-public class ServerAuthenticatesClientDto : BaseDto
-{
-    public List<string> Topics { get; set; } = new List<string>();
-}
+namespace Api.EventHandlers;
 
 public class ClientWantsToAuthenticate(IConnectionManager manager, ILogger<ClientWantsToAuthenticate> logger) 
     : BaseEventHandler<ClientWantsToAuthenticateDto> 
@@ -31,7 +21,6 @@ public class ClientWantsToAuthenticate(IConnectionManager manager, ILogger<Clien
         logger.LogInformation(JsonSerializer.Serialize(manager.GetAllMembersWithTopics()));
         logger.LogInformation(JsonSerializer.Serialize(manager.GetAllTopicsWithMembers()));
         
-        // Send response
         var response = new ServerAuthenticatesClientDto { Topics = topics, requestId = dto.requestId};
         socket.SendDto(response);
     }

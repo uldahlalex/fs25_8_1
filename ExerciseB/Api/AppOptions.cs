@@ -1,6 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 
-namespace ExerciseA;
+namespace Api;
 
 public class AppOptions
 {
