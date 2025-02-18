@@ -16,36 +16,35 @@ public class CustomWebSocketServer(IConnectionManager manager, ILogger<CustomWeb
         var url = $"ws://0.0.0.0:{port}";
         var server = new WebSocketServer(url);
         
-        Action<IWebSocketConnection> config = ws =>
+        server.Start(socket =>
         {
-            var queryString = ws.ConnectionInfo.Path.Split('?').Length > 1
-                ? ws.ConnectionInfo.Path.Split('?')[1]
+            var queryString = socket.ConnectionInfo.Path.Split('?').Length > 1
+                ? socket.ConnectionInfo.Path.Split('?')[1]
                 : "";
 
             var id = HttpUtility.ParseQueryString(queryString)["id"];
 
-            ws.OnOpen = () => manager.OnOpen(ws, id);
-            ws.OnClose = () => manager.OnClose(ws, id);
-            ws.OnMessage = message =>
+            socket.OnOpen = () => manager.OnOpen(socket, id);
+            socket.OnClose = () => manager.OnClose(socket, id);
+            socket.OnMessage = message =>
             {
                 Task.Run(async () =>
                 {
                     try
                     {
-                        await app.CallEventHandler(ws, message);
+                        await app.CallEventHandler(socket, message);
                     }
                     catch (Exception e)
                     { 
                         logger.LogError(e, "Error while handling message");
-                        ws.SendDto(new ServerSendsErrorMessageDto()
+                        socket.SendDto(new ServerSendsErrorMessageDto()
                         {
                             Error = e.Message
                         });
                     }
                 });
             };
-        };
-        server.Start(config);
+        });
     }
 
     private int GetAvailablePort(int startPort)
