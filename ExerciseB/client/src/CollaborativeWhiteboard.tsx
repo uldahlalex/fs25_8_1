@@ -17,7 +17,6 @@ import CanvasTools from './CanvasTools';
 export default function CollaborativeWhiteboard() {
     const { sendRequest, onMessage, readyState } = useWsClient();
     const canvasRef = useRef<HTMLCanvasElement>(null);
-    const [localCtx, setLocalCtx] = useState<CanvasRenderingContext2D | null>(null);
 
     const [room, setRoom] = useState<string>('');
     const [isDrawing, setIsDrawing] = useState(false);
@@ -26,12 +25,6 @@ export default function CollaborativeWhiteboard() {
     const [lineWidth, setLineWidth] = useState(2);
     const [startPoint, setStartPoint] = useState<Point | null>(null);
     const [lastPoint, setLastPoint] = useState<Point | null>(null);
-
-    useEffect(() => {
-        if (canvasRef.current) {
-            setLocalCtx(canvasRef.current.getContext('2d'));
-        }
-    }, []);
 
     useEffect(() => {
         if (readyState !== 1) return;
@@ -98,7 +91,7 @@ export default function CollaborativeWhiteboard() {
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
 
-        switch (action.tool) {
+        switch (action.tool.toLowerCase()) { // Add toLowerCase() to handle case differences
             case 'pencil':
                 ctx.beginPath();
                 ctx.moveTo(action.startPoint.x, action.startPoint.y);
@@ -148,9 +141,7 @@ export default function CollaborativeWhiteboard() {
     };
 
     const draw = (e: React.MouseEvent<HTMLCanvasElement>) => {
-        e.preventDefault();
-
-        if (!isDrawing || !room || !lastPoint || !canvasRef.current || !localCtx) return;
+        if (!isDrawing || !room || !lastPoint || !canvasRef.current) return;
 
         const rect = canvasRef.current.getBoundingClientRect();
         const currentPoint: Point = {
@@ -158,24 +149,13 @@ export default function CollaborativeWhiteboard() {
             y: e.clientY - rect.top
         };
 
-        // Draw locally
-        localCtx.strokeStyle = color;
-        localCtx.lineWidth = lineWidth;
-        localCtx.lineCap = 'round';
-        localCtx.lineJoin = 'round';
-
-        localCtx.beginPath();
-        localCtx.moveTo(lastPoint.x, lastPoint.y);
-        localCtx.lineTo(currentPoint.x, currentPoint.y);
-        localCtx.stroke();
-
+        // Only update the last point - no local drawing
         setLastPoint(currentPoint);
     };
 
     const stopDrawing = async () => {
         if (!isDrawing || !startPoint || !lastPoint) return;
 
-        // Send drawing action to server only when mouse is released
         const action: DrawingAction = {
             tool,
             color,
@@ -234,6 +214,4 @@ export default function CollaborativeWhiteboard() {
             </div>
         </div>
     );
-
-
 }

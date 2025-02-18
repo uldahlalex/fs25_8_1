@@ -3,9 +3,11 @@ import { WsClientProvider } from "ws-request-hook";
 import CollaborativeWhiteboard from "./CollaborativeWhiteboard";
 
 export default function App() {
+    const randomUid = crypto.randomUUID();
+    console.log("Random UID: "+randomUid);
     return (
         <StrictMode>
-            <WsClientProvider url={'ws://localhost:8181?id='+crypto.randomUUID()}>
+            <WsClientProvider url={'ws://localhost:8181?id='+randomUid}>
                 <div className="min-h-screen bg-gray-50">
                     <header className="bg-white shadow">
                         <div className="max-w-7xl mx-auto py-4 px-4">

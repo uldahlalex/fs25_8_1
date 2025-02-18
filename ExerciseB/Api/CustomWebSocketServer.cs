@@ -44,8 +44,7 @@ public class CustomWebSocketServer(IConnectionManager manager)
           
             ws.OnError = e =>
             {
-                Console.WriteLine(e.Message);
-                Console.WriteLine(e.StackTrace);
+                manager.OnClose(ws, id);
             };
             ws.OnMessage = message =>
             {

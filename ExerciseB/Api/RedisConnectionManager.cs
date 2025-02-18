@@ -9,6 +9,11 @@ public class RedisConnectionManager : IConnectionManager
 {
     private readonly IConnectionMultiplexer _redis;
     public ConcurrentDictionary<string, IWebSocketConnection> ConnectionIdToSocket { get; } = new();
+    public ConcurrentDictionary<string, ConcurrentDictionary<string, IWebSocketConnection>> ConnectionIdToSockets
+    {
+        get;
+    }
+
     public ConcurrentDictionary<string, string> SocketToConnectionId { get; } = new();
 
 
@@ -81,9 +86,9 @@ public class RedisConnectionManager : IConnectionManager
         return result;
     }
 
-    public Task<Dictionary<string, string>> GetAllConnectionIdsWithSocketId()
+    public async Task<Dictionary<string, List<string>>> GetAllConnectionIdsWithSocketId()
     {
-        return Task.FromResult(ConnectionIdToSocket.ToDictionary(k => k.Key, v => v.Value.ConnectionInfo.Id.ToString()));
+        return null;
     }
 
     public async Task AddToTopic(string topic, string memberId, TimeSpan? expiry = null)
