@@ -16,21 +16,7 @@ public class ConnectionManagerTests
 
     public ConnectionManagerTests()
     {
-        // Set up configuration
-        var configuration = new ConfigurationBuilder()
-            .SetBasePath(Directory.GetCurrentDirectory())
-            .AddJsonFile("appsettings.json", optional: false)
-            .AddEnvironmentVariables() // This will override appsettings.json values
-            .Build();
-
-        // Set up options
-        var services = new ServiceCollection();
-        services.AddOptions<AppOptions>()
-            .Bind(configuration.GetSection(nameof(AppOptions)))
-            .ValidateOnStart();
-
-        var serviceProvider = services.BuildServiceProvider();
-        _appOptions = serviceProvider.GetRequiredService<IOptions<AppOptions>>().Value;
+ 
 
         // Set up logging
         var loggerFactory = new LoggerFactory();
