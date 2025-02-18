@@ -22,9 +22,11 @@ public class ClientWantsToJoinRoomEventHandler(IConnectionManager connectionMana
 {
     public override async Task Handle(ClientWantsToJoinRoomDto dto, IWebSocketConnection socket)
     {
-        var members = await connectionManager
-            .GetTopicsFromMemberId(socket.ConnectionInfo.Id.ToString());
-        var clientId = members.FirstOrDefault() ?? throw new Exception("Could not find member ID");
+        var result = connectionManager.SocketToConnectionId.TryGetValue(socket.ConnectionInfo.Id.ToString(), out var clientId);
+        if(!result || clientId == null)
+        {
+            throw new InvalidOperationException("No client ID found for socket");
+        }
         await connectionManager.AddToTopic(dto.RoomId, 
             clientId);
         var response = new ServerConfirmsJoinRoomDto()

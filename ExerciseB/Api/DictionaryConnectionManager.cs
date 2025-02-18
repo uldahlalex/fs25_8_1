@@ -7,8 +7,8 @@ namespace Api;
 
 public class DictionaryConnectionManager : IConnectionManager
 {
-    public ConcurrentDictionary<string /* Connection ID */, IWebSocketConnection /* Sockets */> Sockets { get; } = new();
-
+    public ConcurrentDictionary<string /* Connection ID */, IWebSocketConnection /* Sockets */> ConnectionIdToSocket { get; } = new();
+    public ConcurrentDictionary<string /* Socket ID */, string /* Connection ID */> SocketToConnectionId { get; } = new();
 
     /// <summary>
     /// Lookup(key) = Topic ID, value = hashset of Connection IDs 
@@ -42,26 +42,38 @@ public class DictionaryConnectionManager : IConnectionManager
         return Task.FromResult(MemberTopics);
     }
 
+    public Task<Dictionary<string, string>> GetAllConnectionIdsWithSocketId()
+    {
+        return Task.FromResult(ConnectionIdToSocket.ToDictionary(k => k.Key, v => v.Value.ConnectionInfo.Id.ToString()));
+    }
+
     public Task AddToTopic(string topic, string memberId, TimeSpan? expiry = null)
     {
         TopicMembers.AddOrUpdate(
             topic,
-            new HashSet<string> { memberId },
+            _ => new HashSet<string> { memberId },
             (_, existing) =>
             {
-                existing.Add(memberId);
-                return existing;
+                lock (existing)
+                {
+                    existing.Add(memberId);
+                    return existing;
+                }
             });
 
         MemberTopics.AddOrUpdate(
             memberId,
-            new HashSet<string> { topic },
+            _ => new HashSet<string> { topic },
             (_, existing) =>
             {
-                existing.Add(topic);
-                return existing;
+                lock (existing)
+                {
+                    existing.Add(topic);
+                    return existing;
+                }
             });
 
+        _logger.LogInformation($"Added member {memberId} to topic {topic}");
         return Task.CompletedTask;
     }
 
@@ -69,12 +81,18 @@ public class DictionaryConnectionManager : IConnectionManager
     {
         if (TopicMembers.TryGetValue(topic, out var members))
         {
-            members.Remove(memberId);
+            lock (members)
+            {
+                members.Remove(memberId);
+            }
         }
 
         if (MemberTopics.TryGetValue(memberId, out var topics))
         {
-            topics.Remove(topic);
+            lock (topics)
+            {
+                topics.Remove(topic);
+            }
         }
 
         return Task.CompletedTask;
@@ -96,19 +114,23 @@ public class DictionaryConnectionManager : IConnectionManager
                 : new List<string>());
     }
 
-    public Task OnOpen(IWebSocketConnection socket, string clientId)
+    public async Task OnOpen(IWebSocketConnection socket, string clientId)
     {
-        Sockets.AddOrUpdate(clientId, socket, (_, _) => socket);
-        AddToTopic(socket.ConnectionInfo.Id.ToString(), clientId);
-        AddToTopic(clientId, socket.ConnectionInfo.Id.ToString());
+        ConnectionIdToSocket.AddOrUpdate(clientId, socket, (_, _) => socket);
+        SocketToConnectionId.AddOrUpdate(socket.ConnectionInfo.Id.ToString(), clientId, (_, _) => clientId);
         _logger.LogInformation("Connected with client ID " + clientId + " and socket ID " + socket.ConnectionInfo.Id);
-        return Task.CompletedTask;
+        _logger.LogInformation(JsonSerializer.Serialize(await GetAllConnectionIdsWithSocketId(), new JsonSerializerOptions()
+        {
+            WriteIndented = true
+        }));
+
     }
     
 
     public Task OnClose(IWebSocketConnection socket, string clientId)
     {
-        Sockets.TryRemove(clientId, out _);
+        ConnectionIdToSocket.TryRemove(clientId, out _);
+        SocketToConnectionId.TryRemove(socket.ConnectionInfo.Id.ToString(), out _);
         
         if (MemberTopics.TryGetValue(clientId, out var topics))
         {
@@ -124,28 +146,60 @@ public class DictionaryConnectionManager : IConnectionManager
 
  
 
-    public Task BroadcastToTopic<T>(string topic, T message) where T : BaseDto
+    public async Task BroadcastToTopic<T>(string topic, T message) where T : BaseDto
     {
-        _logger.LogInformation("Topics with members: "+JsonSerializer.Serialize(GetAllTopicsWithMembers(), new JsonSerializerOptions()
-        {
-            WriteIndented = true
-        }));
+        _logger.LogInformation($"Attempting to broadcast to topic: {topic}");
+
         if (TopicMembers.TryGetValue(topic, out var members))
         {
-            _logger.LogInformation("Found members: "+JsonSerializer.Serialize(members, new JsonSerializerOptions()
+            _logger.LogInformation($"Found {members.Count} members in topic {topic}");
+        
+            // Create a safe copy of members to iterate over
+            List<string> membersList;
+            lock (members)
             {
-                WriteIndented = true
-            }));
-            foreach (var memberId in members)
+                membersList = members.ToList();
+            }
+
+            foreach (var memberId in membersList)
             {
-                if (Sockets.TryGetValue(memberId, out var socket))
+                _logger.LogInformation($"Attempting to send to member: {memberId}");
+            
+                if (ConnectionIdToSocket.TryGetValue(memberId, out var socket))
                 {
-                    Console.WriteLine(memberId + " and socket: "+socket);
-                    socket.SendDto(message);
+                    try
+                    {
+                        if (socket.IsAvailable) // Check if socket is still connected
+                        {
+                            socket.SendDto(message);
+                            _logger.LogInformation($"Successfully sent message to {memberId}");
+                        }
+                        else
+                        {
+                            _logger.LogWarning($"Socket for {memberId} is no longer available");
+                            // Clean up dead connection
+                            await OnClose(socket, memberId);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, $"Failed to send message to {memberId}");
+                        // Clean up failed connection
+                        await OnClose(socket, memberId);
+                    }
+                }
+                else
+                {
+                    _logger.LogWarning($"No socket found for member {memberId}");
+                    // Clean up orphaned member
+                    await RemoveFromTopic(topic, memberId);
                 }
             }
         }
-        return Task.CompletedTask;
+        else
+        {
+            _logger.LogWarning($"No members found for topic {topic}");
+        }
     }
 
 

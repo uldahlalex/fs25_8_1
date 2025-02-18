@@ -83,7 +83,7 @@ public class ConnectionManagerTests
         await manager.OnOpen(ws, connectionId);
         
         // assert
-        Assert.Equal(manager.Sockets.Values.First(), ws);
+        Assert.Equal(manager.ConnectionIdToSocket.Values.First(), ws);
         
         var allTopics = await manager.GetAllTopicsWithMembers();
         var allMembers = await manager.GetAllMembersWithTopics();
@@ -118,7 +118,7 @@ public class ConnectionManagerTests
         await manager.OnClose(ws, connectionId);
         
         // assert
-        Assert.DoesNotContain(manager.Sockets.Values, s => s.ConnectionInfo.Id == socketId);
+        Assert.DoesNotContain(manager.ConnectionIdToSocket.Values, s => s.ConnectionInfo.Id == socketId);
     
         var allTopics = await manager.GetAllTopicsWithMembers();
         Assert.False(allTopics.ContainsKey(socketId.ToString()) && 

@@ -8,7 +8,8 @@ using WebSocketBoilerplate;
 public class RedisConnectionManager : IConnectionManager
 {
     private readonly IConnectionMultiplexer _redis;
-    public ConcurrentDictionary<string, IWebSocketConnection> Sockets { get; } = new();
+    public ConcurrentDictionary<string, IWebSocketConnection> ConnectionIdToSocket { get; } = new();
+    public ConcurrentDictionary<string, string> SocketToConnectionId { get; } = new();
 
 
     private readonly ILogger<RedisConnectionManager> _logger;
@@ -79,6 +80,12 @@ public class RedisConnectionManager : IConnectionManager
     
         return result;
     }
+
+    public Task<Dictionary<string, string>> GetAllConnectionIdsWithSocketId()
+    {
+        return Task.FromResult(ConnectionIdToSocket.ToDictionary(k => k.Key, v => v.Value.ConnectionInfo.Id.ToString()));
+    }
+
     public async Task AddToTopic(string topic, string memberId, TimeSpan? expiry = null)
     {
         expiry ??= TimeSpan.FromDays(1);
@@ -121,7 +128,7 @@ public class RedisConnectionManager : IConnectionManager
 
     public async Task OnOpen(IWebSocketConnection socket, string clientId)
     {
-        var success = Sockets.TryAdd(clientId, socket);
+        var success = ConnectionIdToSocket.TryAdd(clientId, socket);
         if (!success)
             throw new Exception($"Failed to add socket {socket.ConnectionInfo.Id} to dictionary with client ID key {clientId}");
             
@@ -132,7 +139,7 @@ public class RedisConnectionManager : IConnectionManager
 
     public async Task OnClose(IWebSocketConnection socket, string clientId)
     {
-        Sockets.TryRemove(clientId, out _);
+        ConnectionIdToSocket.TryRemove(clientId, out _);
     
         await RemoveFromTopic(socket.ConnectionInfo.Id.ToString(), clientId);
         await RemoveFromTopic(clientId, socket.ConnectionInfo.Id.ToString());
@@ -144,7 +151,7 @@ public class RedisConnectionManager : IConnectionManager
         var members = await GetMembersFromTopicId(topic);
         foreach (var memberId in members)
         {
-            if (Sockets.TryGetValue(memberId, out var socket))
+            if (ConnectionIdToSocket.TryGetValue(memberId, out var socket))
             {
                 _logger.LogInformation("Sending message to socket: "+socket);
 

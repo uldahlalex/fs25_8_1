@@ -13,6 +13,16 @@ export interface DrawingAction {
     lineWidth: number;
     startPoint: Point;
     endPoint: Point;
+}export type ClientWantsToDrawDto = BaseDto & {
+    roomId: string;
+    action: DrawingAction;
+};export type ServerBroadcastsDrawingDto = BaseDto & {
+    roomId: string;
+    action: DrawingAction;
+};
+
+export type ServerConfirmsDrawDto = BaseDto & {
+
 }
 
 // Client -> Server DTOs
@@ -24,10 +34,7 @@ export type ClientWantsToLeaveRoomDto = BaseDto & {
     roomId: string;
 };
 
-export type ClientWantsToDrawDto = BaseDto & {
-    roomId: string;
-    action: DrawingAction;
-};
+
 
 // Server -> Client DTOs
 export type ServerConfirmsJoinRoomDto = BaseDto & {
@@ -35,14 +42,7 @@ export type ServerConfirmsJoinRoomDto = BaseDto & {
     success: boolean;
 };
 
-export type ServerBroadcastsDrawingDto = BaseDto & {
-    roomId: string;
-    action: DrawingAction;
-};
 
-export type ServerConfirmsDrawDto = BaseDto & {
-
-}
 
 // Constants
 export const StringConstants = {
