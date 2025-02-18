@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using Fleck;
+using WebSocketBoilerplate;
 
 namespace Api;
 
@@ -15,5 +16,5 @@ public interface IConnectionManager
     Task<List<string>> GetTopicsFromMemberId(string memberId);
     Task OnOpen(IWebSocketConnection socket, string clientId);
     Task OnClose(IWebSocketConnection socket, string clientId);
-    Task BroadcastToTopic(string topic, string message);
+    Task BroadcastToTopic<T>(string topic, T message) where T : BaseDto;
 }

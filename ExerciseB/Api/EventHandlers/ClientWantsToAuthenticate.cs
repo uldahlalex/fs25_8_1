@@ -32,7 +32,7 @@ public class ClientWantsToAuthenticate(IConnectionManager manager, ILogger<Clien
         logger.LogInformation(JsonSerializer.Serialize(manager.GetAllTopicsWithMembers()));
         
         // Send response
-        var response = new ServerAuthenticatesClientDto { Topics = topics };
+        var response = new ServerAuthenticatesClientDto { Topics = topics, requestId = dto.requestId};
         socket.SendDto(response);
     }
 }

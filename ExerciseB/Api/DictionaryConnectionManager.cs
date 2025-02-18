@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using Fleck;
+using WebSocketBoilerplate;
 
 namespace Api;
 
@@ -101,6 +102,7 @@ public class DictionaryConnectionManager : IConnectionManager
             throw new Exception("Failed to add socket " + socket.ConnectionInfo.Id +
                                 " to dictionary with client ID key " + clientId);
         AddToTopic(socket.ConnectionInfo.Id.ToString(), clientId);
+        AddToTopic(clientId, socket.ConnectionInfo.Id.ToString());
         _logger.LogInformation("Connected with client ID " + clientId + " and socket ID " + socket.ConnectionInfo.Id);
         return Task.CompletedTask;
     }
@@ -124,7 +126,7 @@ public class DictionaryConnectionManager : IConnectionManager
 
  
 
-    public Task BroadcastToTopic(string topic, string message)
+    public Task BroadcastToTopic<T>(string topic, T message) where T : BaseDto
     {
         if (TopicMembers.TryGetValue(topic, out var members))
         {
@@ -132,7 +134,7 @@ public class DictionaryConnectionManager : IConnectionManager
             {
                 if (Sockets.TryGetValue(memberId, out var socket))
                 {
-                    socket.Send(message);
+                    socket.SendDto(message);
                 }
             }
         }

@@ -1,7 +1,9 @@
 using System.Collections.Concurrent;
+using System.Text.Json;
 using Api;
 using Fleck;
 using StackExchange.Redis;
+using WebSocketBoilerplate;
 
 public class RedisConnectionManager : IConnectionManager
 {
@@ -124,6 +126,7 @@ public class RedisConnectionManager : IConnectionManager
             throw new Exception($"Failed to add socket {socket.ConnectionInfo.Id} to dictionary with client ID key {clientId}");
             
         await AddToTopic(socket.ConnectionInfo.Id.ToString(), clientId);
+        await AddToTopic(clientId, socket.ConnectionInfo.Id.ToString());
         _logger.LogInformation($"Connected with client ID {clientId} and socket ID {socket.ConnectionInfo.Id}");
     }
 
@@ -132,17 +135,20 @@ public class RedisConnectionManager : IConnectionManager
         Sockets.TryRemove(clientId, out _);
     
         await RemoveFromTopic(socket.ConnectionInfo.Id.ToString(), clientId);
+        await RemoveFromTopic(clientId, socket.ConnectionInfo.Id.ToString());
     }
     
     
-    public async Task BroadcastToTopic(string topic, string message)
+    public async Task BroadcastToTopic<T>(string topic, T message) where T : BaseDto
     {
         var members = await GetMembersFromTopicId(topic);
         foreach (var memberId in members)
         {
             if (Sockets.TryGetValue(memberId, out var socket))
             {
-                socket.Send(message);
+                _logger.LogInformation("Sending message to socket: "+socket);
+
+                socket.SendDto(message);
             }
         }
     }

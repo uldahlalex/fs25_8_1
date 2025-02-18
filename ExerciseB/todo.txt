@@ -1,1 +1,2 @@
 Test: Client re-connection with same connection ID connects to same state
+Test: Auto-reconnection with conncetion ID

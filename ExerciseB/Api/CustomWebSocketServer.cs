@@ -19,7 +19,6 @@ public class CustomWebSocketServer(IConnectionManager manager)
         var server = new WebSocketServer(url);
         Action<IWebSocketConnection> config = ws =>
         {
-            // Get just the query string part
             var queryString = ws.ConnectionInfo.Path.Split('?').Length > 1 
                 ? ws.ConnectionInfo.Path.Split('?')[1] 
                 : "";
@@ -34,6 +33,11 @@ public class CustomWebSocketServer(IConnectionManager manager)
                             ws.OnClose = () => manager.OnClose(ws, id);
             } catch (Exception e)
             {
+                var errorDto = new ServerSendsErrorMessageDto()
+                {
+                    Error = e.Message
+                };
+                ws.SendDto(errorDto);
                 Console.WriteLine(e.Message);
                 Console.WriteLine(e.StackTrace);
             }
@@ -55,8 +59,11 @@ public class CustomWebSocketServer(IConnectionManager manager)
                     {
                         Console.WriteLine(e.Message);
                         Console.WriteLine(e.StackTrace);
-                        var baseDto = JsonSerializer.Deserialize<BaseDto>(message);
-                        ws.SendDto(baseDto);
+                        var errorDto = new ServerSendsErrorMessageDto()
+                        {
+                            Error = e.Message
+                        };
+                        ws.SendDto(errorDto);
                     }
                 });
             };
@@ -86,4 +93,9 @@ public class CustomWebSocketServer(IConnectionManager manager)
 
         return port;
     }
+}
+
+public class ServerSendsErrorMessageDto : BaseDto
+{
+    public string Error { get; set; }
 }
