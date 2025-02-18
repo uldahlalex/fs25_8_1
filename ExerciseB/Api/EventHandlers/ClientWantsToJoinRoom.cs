@@ -23,8 +23,8 @@ public class ClientWantsToJoinRoomEventHandler(IConnectionManager connectionMana
     public override async Task Handle(ClientWantsToJoinRoomDto dto, IWebSocketConnection socket)
     {
         var members = await connectionManager
-            .GetMembersFromTopicId(socket.ConnectionInfo.Id.ToString());
-        var clientId = members.FirstOrDefault() ?? "Could not find member ID";
+            .GetTopicsFromMemberId(socket.ConnectionInfo.Id.ToString());
+        var clientId = members.FirstOrDefault() ?? throw new Exception("Could not find member ID");
         await connectionManager.AddToTopic(dto.RoomId, 
             clientId);
         var response = new ServerConfirmsJoinRoomDto()

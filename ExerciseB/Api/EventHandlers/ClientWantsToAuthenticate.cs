@@ -21,7 +21,7 @@ public class ClientWantsToAuthenticate(IConnectionManager manager, ILogger<Clien
     public override async Task Handle(ClientWantsToAuthenticateDto dto, IWebSocketConnection socket)
     {
         // Get the client ID from the socket's topic
-        var members = await manager.GetMembersFromTopicId(socket.ConnectionInfo.Id.ToString());
+        var members = await manager.GetTopicsFromMemberId(socket.ConnectionInfo.Id.ToString());
         var clientId = members.FirstOrDefault() ?? 
                        throw new InvalidOperationException($"No client ID found for socket {socket.ConnectionInfo.Id}");
 

@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Text.Json;
 using Fleck;
 using WebSocketBoilerplate;
 
@@ -97,10 +98,7 @@ public class DictionaryConnectionManager : IConnectionManager
 
     public Task OnOpen(IWebSocketConnection socket, string clientId)
     {
-        var success = Sockets.TryAdd(clientId, socket);
-        if (!success)
-            throw new Exception("Failed to add socket " + socket.ConnectionInfo.Id +
-                                " to dictionary with client ID key " + clientId);
+        Sockets.AddOrUpdate(clientId, socket, (_, _) => socket);
         AddToTopic(socket.ConnectionInfo.Id.ToString(), clientId);
         AddToTopic(clientId, socket.ConnectionInfo.Id.ToString());
         _logger.LogInformation("Connected with client ID " + clientId + " and socket ID " + socket.ConnectionInfo.Id);
@@ -128,17 +126,25 @@ public class DictionaryConnectionManager : IConnectionManager
 
     public Task BroadcastToTopic<T>(string topic, T message) where T : BaseDto
     {
+        _logger.LogInformation("Topics with members: "+JsonSerializer.Serialize(GetAllTopicsWithMembers(), new JsonSerializerOptions()
+        {
+            WriteIndented = true
+        }));
         if (TopicMembers.TryGetValue(topic, out var members))
         {
+            _logger.LogInformation("Found members: "+JsonSerializer.Serialize(members, new JsonSerializerOptions()
+            {
+                WriteIndented = true
+            }));
             foreach (var memberId in members)
             {
                 if (Sockets.TryGetValue(memberId, out var socket))
                 {
+                    Console.WriteLine(memberId + " and socket: "+socket);
                     socket.SendDto(message);
                 }
             }
         }
-
         return Task.CompletedTask;
     }
 
