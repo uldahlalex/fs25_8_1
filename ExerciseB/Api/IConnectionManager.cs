@@ -6,11 +6,11 @@ namespace Api;
 
 public interface IConnectionManager
 {
-    public ConcurrentDictionary<string /* Connection ID */, ConcurrentDictionary<string /* Socket ID */, IWebSocketConnection> /* Sockets */> ConnectionIdToSockets { get; } 
+    ConcurrentDictionary<string, IWebSocketConnection> ConnectionIdToSocket { get; }
     ConcurrentDictionary<string, string> SocketToConnectionId { get; }
     public Task<ConcurrentDictionary<string, HashSet<string>>> GetAllTopicsWithMembers();
     public Task<ConcurrentDictionary<string, HashSet<string>>> GetAllMembersWithTopics();
-    public Task<Dictionary<string, List<string>>> GetAllConnectionIdsWithSocketId();
+    public Task<Dictionary<string, string>> GetAllConnectionIdsWithSocketId();
     
     Task AddToTopic(string topic, string memberId, TimeSpan? expiry = null);
     Task RemoveFromTopic(string topic, string memberId);

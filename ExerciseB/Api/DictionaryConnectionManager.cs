@@ -7,18 +7,11 @@ namespace Api;
 
 public class DictionaryConnectionManager : IConnectionManager
 {
-    public ConcurrentDictionary<string /* Connection ID */, ConcurrentDictionary<string /* Socket ID */, IWebSocketConnection> /* Sockets */> ConnectionIdToSockets { get; } = new();
-    public ConcurrentDictionary<string /* Socket ID */, string /* Connection ID */> SocketToConnectionId { get; } = new();
+    public ConcurrentDictionary<string /* Client ID */, IWebSocketConnection> ConnectionIdToSocket { get; } = new();
+    public ConcurrentDictionary<string /* Socket ID */, string /* Client ID */> SocketToConnectionId { get; } = new();
+    public ConcurrentDictionary<string, HashSet<string>> TopicMembers { get; set; } = new();
+    public ConcurrentDictionary<string, HashSet<string>> MemberTopics { get; set; } = new();
 
-    /// <summary>
-    /// Lookup(key) = Topic ID, value = hashset of Connection IDs 
-    /// </summary>
-    public ConcurrentDictionary<string /* Topic ID */, HashSet<string> /* All Connection IDs connected to topic */> TopicMembers { get; set; } = new();
-   
-    /// <summary>
-    /// Lookup (key) = Connection ID, value = hashset of topic IDs
-    /// </summary>
-    public ConcurrentDictionary<string /* Connection ID */, HashSet<string> /* all the topic ID's they are connected to */> MemberTopics { get; set; } = new();
 
     private string[] InitialTopicIds = new[] { "device/A", "room/A" }; //could be persisted in a database
     private readonly ILogger<DictionaryConnectionManager> _logger;
@@ -42,13 +35,9 @@ public class DictionaryConnectionManager : IConnectionManager
         return Task.FromResult(MemberTopics);
     }
 
-    public Task<Dictionary<string, List<string>>> GetAllConnectionIdsWithSocketId()
+    public Task<Dictionary<string, string>> GetAllConnectionIdsWithSocketId()
     {
-        return Task.FromResult(
-            ConnectionIdToSockets.ToDictionary(
-                k => k.Key, 
-                v => v.Value.Keys.ToList()
-            )
+        return Task.FromResult(ConnectionIdToSocket.ToDictionary(k => k.Key, v => v.Value.ConnectionInfo.Id.ToString())
         );
     }
     
@@ -124,21 +113,24 @@ public class DictionaryConnectionManager : IConnectionManager
                 : new List<string>());
     }
 
-   public async Task OnOpen(IWebSocketConnection socket, string clientId)
+
+  public async Task OnOpen(IWebSocketConnection socket, string clientId)
     {
         _logger.LogInformation($"OnOpen called with clientId: {clientId} and socketId: {socket.ConnectionInfo.Id}");
 
-        // Add or get the dictionary of sockets for this client
-        var clientSockets = ConnectionIdToSockets.GetOrAdd(clientId, _ => new ConcurrentDictionary<string, IWebSocketConnection>());
-        
-        // Add this socket to the client's sockets
-        clientSockets.TryAdd(socket.ConnectionInfo.Id.ToString(), socket);
-        
-        // Add to socket mapping
-        SocketToConnectionId.TryAdd(socket.ConnectionInfo.Id.ToString(), clientId);
+        // If there's an existing connection for this client, clean it up first
+        if (ConnectionIdToSocket.TryRemove(clientId, out var oldSocket))
+        {
+            var oldSocketId = oldSocket.ConnectionInfo.Id.ToString();
+            SocketToConnectionId.TryRemove(oldSocketId, out _);
+            _logger.LogInformation($"Removed old connection {oldSocketId} for client {clientId}");
+        }
 
-        _logger.LogInformation($"Client {clientId} now has {clientSockets.Count} active connections");
-        
+        // Add new connection
+        ConnectionIdToSocket[clientId] = socket;
+        SocketToConnectionId[socket.ConnectionInfo.Id.ToString()] = clientId;
+
+        _logger.LogInformation($"Added new connection {socket.ConnectionInfo.Id} for client {clientId}");
         await LogCurrentState();
     }
 
@@ -146,30 +138,25 @@ public class DictionaryConnectionManager : IConnectionManager
     {
         var socketId = socket.ConnectionInfo.Id.ToString();
         
-        // Remove from socket mapping
+        // Only remove if this is the current socket for this client
+        if (ConnectionIdToSocket.TryGetValue(clientId, out var currentSocket) && 
+            currentSocket.ConnectionInfo.Id.ToString() == socketId)
+        {
+            ConnectionIdToSocket.TryRemove(clientId, out _);
+            _logger.LogInformation($"Removed connection for client {clientId}");
+        }
+
         SocketToConnectionId.TryRemove(socketId, out _);
 
-        // Remove from client sockets
-        if (ConnectionIdToSockets.TryGetValue(clientId, out var clientSockets))
+        // Clean up topics
+        if (MemberTopics.TryGetValue(clientId, out var topics))
         {
-            clientSockets.TryRemove(socketId, out _);
-            
-            // If this was the last socket for this client, remove the client entirely
-            if (clientSockets.IsEmpty)
+            foreach (var topic in topics)
             {
-                ConnectionIdToSockets.TryRemove(clientId, out _);
-                
-                // Clean up topics
-                if (MemberTopics.TryGetValue(clientId, out var topics))
-                {
-                    foreach (var topic in topics)
-                    {
-                        await RemoveFromTopic(topic, clientId);
-                    }
-                }
-                MemberTopics.TryRemove(clientId, out _);
+                await RemoveFromTopic(topic, clientId);
             }
         }
+        MemberTopics.TryRemove(clientId, out _);
     }
 
     public async Task BroadcastToTopic<T>(string topic, T message) where T : BaseDto
@@ -182,36 +169,30 @@ public class DictionaryConnectionManager : IConnectionManager
             
             foreach (var memberId in members.ToList())
             {
-                if (ConnectionIdToSockets.TryGetValue(memberId, out var clientSockets))
+                if (ConnectionIdToSocket.TryGetValue(memberId, out var socket))
                 {
-                    var successfulBroadcast = false;
-                    
-                    foreach (var socket in clientSockets.Values)
+                    try
                     {
-                        try
+                        if (socket.IsAvailable)
                         {
-                            if (socket.IsAvailable)
-                            {
-                                socket.SendDto(message);
-                                successfulBroadcast = true;
-                                _logger.LogInformation($"Successfully sent message to {memberId} via socket {socket.ConnectionInfo.Id}");
-                            }
+                            socket.SendDto(message);
+                            _logger.LogInformation($"Successfully sent message to {memberId}");
                         }
-                        catch (Exception ex)
+                        else
                         {
-                            _logger.LogError(ex, $"Failed to send message to socket {socket.ConnectionInfo.Id} for member {memberId}");
+                            _logger.LogWarning($"Socket not available for {memberId}");
+                            await RemoveFromTopic(topic, memberId);
                         }
                     }
-
-                    if (!successfulBroadcast)
+                    catch (Exception ex)
                     {
-                        _logger.LogWarning($"Failed to broadcast to any sockets for member {memberId}");
+                        _logger.LogError(ex, $"Failed to send message to {memberId}");
                         await RemoveFromTopic(topic, memberId);
                     }
                 }
                 else
                 {
-                    _logger.LogWarning($"No sockets found for member: {memberId}");
+                    _logger.LogWarning($"No socket found for member: {memberId}");
                     await RemoveFromTopic(topic, memberId);
                 }
             }
@@ -221,7 +202,6 @@ public class DictionaryConnectionManager : IConnectionManager
             _logger.LogWarning($"No topic found: {topic}");
         }
     }
-
 
     public async Task LogCurrentState()
     {

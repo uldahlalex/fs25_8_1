@@ -23,9 +23,10 @@ public class ClientWantsToJoinRoomEventHandler(IConnectionManager connectionMana
     public override async Task Handle(ClientWantsToJoinRoomDto dto, IWebSocketConnection socket)
     {
         var result = connectionManager.SocketToConnectionId.TryGetValue(socket.ConnectionInfo.Id.ToString(), out var clientId);
+        Console.WriteLine("socket id" + socket.ConnectionInfo.Id.ToString());
         if(!result || clientId == null)
         {
-            throw new InvalidOperationException("No client ID found for socket");
+            throw new InvalidOperationException("No client ID found for socket " + clientId);
         }
         await connectionManager.AddToTopic(dto.RoomId, 
             clientId);
