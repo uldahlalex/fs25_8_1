@@ -1,3 +1,4 @@
+using System.Security.Authentication;
 using System.Text.Json;
 using Api.EventHandlers.Dtos;
 using Fleck;
@@ -15,13 +16,19 @@ public class ClientWantsToAuthenticate(IConnectionManager manager, ILogger<Clien
         {
             throw new InvalidOperationException("No client ID found for socket");
         }
+
+        if (!Login(dto)) throw new AuthenticationException("Invalid login!");
+        
         await manager.AddToTopic("authenticated", clientId);
         var topics = await manager.GetTopicsFromMemberId(clientId);
         
-        logger.LogInformation(JsonSerializer.Serialize(manager.GetAllMembersWithTopics()));
-        logger.LogInformation(JsonSerializer.Serialize(manager.GetAllTopicsWithMembers()));
-        
         var response = new ServerAuthenticatesClientDto { Topics = topics, requestId = dto.requestId};
         socket.SendDto(response);
+    }
+
+    private bool Login(ClientWantsToAuthenticateDto dto)
+    {
+        //imagine there is a login here
+        return true;
     }
 }

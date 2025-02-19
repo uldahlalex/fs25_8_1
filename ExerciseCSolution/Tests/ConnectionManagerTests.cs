@@ -16,12 +16,8 @@ public class ConnectionManagerTests
 
     public ConnectionManagerTests()
     {
- 
-
-        // Set up logging
         var loggerFactory = new LoggerFactory();
         var dictionaryLogger = new Logger<DictionaryConnectionManager>(loggerFactory);
-
         _dictionaryManager = new DictionaryConnectionManager(dictionaryLogger);
     }
 
